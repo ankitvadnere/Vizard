@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vizard — Java execution visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark" aria-hidden="true">{▸}</span>
+        <span class="brand-name">Vizard</span>
+    </div>
+
+    <div class="toolbar">
+        <label class="example-picker">
+            <span>Example</span>
+            <select id="example-select"></select>
+        </label>
+        <button id="run-button" class="run-button" type="button" title="Run (Ctrl+Enter)">
+            <span class="run-icon" aria-hidden="true">▶</span>
+            <span class="run-label">Run</span>
+        </button>
+    </div>
+</header>
+
+<main class="workspace">
+    <section class="pane editor-pane" aria-label="Java code">
+        <div class="pane-header">
+            <h2>Main.java</h2>
+            <span class="hint">Ctrl+Enter to run</span>
+        </div>
+        <div id="editor" class="editor"></div>
+    </section>
+
+    <section class="side">
+        <section class="pane output-pane" aria-label="Program output">
+            <div class="pane-header">
+                <h2>Output</h2>
+                <button id="clear-output" class="text-button" type="button">Clear</button>
+            </div>
+            <div id="result-banner" class="result-banner" hidden></div>
+            <pre id="output" class="output"><span class="placeholder">Press Run to compile and execute your program.</span></pre>
+        </section>
+
+        <section class="pane problems-pane" aria-label="Problems">
+            <div class="pane-header">
+                <h2>Problems <span id="problem-count" class="count">0</span></h2>
+            </div>
+            <ul id="problems" class="problems"></ul>
+        </section>
+
+        <section class="pane input-pane" aria-label="Program input">
+            <div class="pane-header">
+                <h2><label for="stdin">Program input</label></h2>
+                <span class="hint">Read by Scanner(System.in)</span>
+            </div>
+            <textarea id="stdin" class="stdin" spellcheck="false" placeholder="e.g. 4 5"></textarea>
+        </section>
+    </section>
+</main>
+
+<footer class="statusbar">
+    <span id="status-pill" class="status-pill" data-state="idle">Ready</span>
+    <span id="status-compile" class="metric"></span>
+    <span id="status-run" class="metric"></span>
+    <span id="status-exit" class="metric"></span>
+    <span id="status-backend" class="metric backend"></span>
+</footer>
+
+<!-- Monaco uses an AMD loader, loaded before our ES modules. -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

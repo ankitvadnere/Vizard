@@ -1,0 +1,16 @@
+# Build output
+backend/target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
