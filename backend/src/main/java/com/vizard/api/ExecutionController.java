@@ -2,6 +2,7 @@ package com.vizard.api;
 
 import com.vizard.api.dto.ExecuteRequest;
 import com.vizard.api.dto.ExecutionResponse;
+import com.vizard.api.dto.trace.TraceResponse;
 import com.vizard.execution.ExecutionService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +27,12 @@ public class ExecutionController {
     @PostMapping("/execute")
     public ExecutionResponse execute(@Valid @RequestBody ExecuteRequest request) {
         return executionService.execute(request.code(), request.stdin());
+    }
+
+    /** Compile and run a program under the debugger, returning every execution step. */
+    @PostMapping("/trace")
+    public TraceResponse trace(@Valid @RequestBody ExecuteRequest request) {
+        return executionService.trace(request.code(), request.stdin());
     }
 
     /** Lets the frontend check the backend is up. */

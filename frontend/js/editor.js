@@ -5,9 +5,11 @@ const MARKER_OWNER = "vizard";
 
 let editor = null;
 let errorDecorations = null;
+let executionDecorations = null;
+const changeListeners = new Set();
 
 /** Loads Monaco from the CDN and creates the editor. Resolves when ready. */
-export function initEditor(container, initialCode, onRun) {
+export function initEditor(container, initialCode, shortcuts) {
     // Monaco's web workers can't load cross-origin directly; this proxy fixes that.
     window.MonacoEnvironment = {
         getWorkerUrl() {
@@ -32,14 +34,21 @@ importScripts("${MONACO_BASE}/vs/base/worker/workerMain.js");`;
                 automaticLayout: true,
                 scrollBeyondLastLine: false,
                 tabSize: 4,
-                renderLineHighlight: "all",
+                renderLineHighlight: "none", // the execution line has its own highlight
                 glyphMargin: true,
                 padding: { top: 10 },
             });
             errorDecorations = editor.createDecorationsCollection();
-            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, onRun);
-            // Editing invalidates old error markers.
-            editor.onDidChangeModelContent(() => clearDiagnostics());
+            executionDecorations = editor.createDecorationsCollection();
+
+            const { KeyMod, KeyCode } = monaco;
+            editor.addCommand(KeyMod.CtrlCmd | KeyCode.Enter, shortcuts.run);
+            editor.addCommand(KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Enter, shortcuts.trace);
+
+            editor.onDidChangeModelContent(() => {
+                clearDiagnostics();
+                changeListeners.forEach((listener) => listener());
+            });
             resolve(editor);
         });
     });
@@ -56,7 +65,12 @@ export function setCode(code) {
     }
 }
 
-/** Shows compile / policy problems as red squiggles in the editor. */
+/** Called whenever the code changes (typing, paste, or loading an example). */
+export function onCodeChange(listener) {
+    changeListeners.add(listener);
+}
+
+/** Shows compile / policy problems as squiggles in the editor. */
 export function showProblems(problems) {
     if (!editor) return;
     const monaco = window.monaco;
@@ -65,7 +79,7 @@ export function showProblems(problems) {
         .filter((p) => p.line > 0)
         .map((p) => {
             const line = Math.min(p.line, model.getLineCount());
-            const column = Math.max(p.column, 1);
+            const column = Math.max(p.column ?? 1, 1);
             return {
                 startLineNumber: line,
                 startColumn: column,
@@ -92,6 +106,28 @@ export function markRuntimeErrorLine(line) {
         },
     }]);
     editor.revealLineInCenterIfOutsideViewport(line);
+}
+
+/**
+ * Marks the line the current step is on.
+ * kind: "next" (about to run), "return" (method returning), "error" (exception thrown here)
+ */
+export function highlightExecutionLine(line, kind = "next") {
+    if (!editor || !line) return;
+    const styles = {
+        next: { className: "exec-line", glyphMarginClassName: "exec-glyph" },
+        return: { className: "exec-line-return", glyphMarginClassName: "exec-glyph-return" },
+        error: { className: "runtime-error-line", glyphMarginClassName: "runtime-error-glyph" },
+    };
+    executionDecorations.set([{
+        range: new window.monaco.Range(line, 1, line, 1),
+        options: { isWholeLine: true, ...styles[kind] },
+    }]);
+    editor.revealLineInCenterIfOutsideViewport(line);
+}
+
+export function clearExecutionLine() {
+    executionDecorations?.clear();
 }
 
 export function clearDiagnostics() {

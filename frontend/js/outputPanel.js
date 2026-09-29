@@ -1,4 +1,4 @@
-// Renders an ExecutionResponse into the Output, Problems and status bar areas.
+// The console area (Output / Problems / Input tabs), the result banner and the status bar.
 
 const els = {
     output: document.getElementById("output"),
@@ -9,6 +9,10 @@ const els = {
     compile: document.getElementById("status-compile"),
     run: document.getElementById("status-run"),
     exit: document.getElementById("status-exit"),
+    tabs: [...document.querySelectorAll(".tab")],
+    panels: [...document.querySelectorAll(".tab-panel")],
+    stdin: document.getElementById("stdin"),
+    inputDot: document.getElementById("input-dot"),
 };
 
 // status → [banner title, visual kind]
@@ -25,15 +29,45 @@ const STATUS_VIEW = {
     INTERNAL_ERROR: ["Vizard error", "err"],
 };
 
-export function showRunning() {
-    els.pill.textContent = "Compiling and running…";
+const PLACEHOLDER = "Press Run for the output, or Step through to follow the program line by line.";
+
+export function initConsole() {
+    for (const tab of els.tabs) {
+        tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+    }
+    const updateDot = () => { els.inputDot.hidden = els.stdin.value.trim() === ""; };
+    els.stdin.addEventListener("input", updateDot);
+    updateDot();
+    showPlaceholder();
+}
+
+export function selectTab(name) {
+    for (const tab of els.tabs) tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
+    for (const panel of els.panels) panel.hidden = panel.dataset.panel !== name;
+}
+
+export function setStdin(text) {
+    els.stdin.value = text;
+    els.inputDot.hidden = text.trim() === "";
+}
+
+export function getStdin() {
+    return els.stdin.value;
+}
+
+export function showRunning(label) {
+    els.pill.textContent = label;
     els.pill.dataset.state = "running";
     els.compile.textContent = "";
     els.run.textContent = "";
     els.exit.textContent = "";
 }
 
-export function renderResult(result, onProblemClick) {
+/**
+ * Shows how a run ended. `note` is an extra line under the banner (e.g. the step limit).
+ * Returns true if there were problems to look at.
+ */
+export function renderResult(result, onProblemClick, note = "") {
     const [title, kind] = STATUS_VIEW[result.status] ?? ["Unknown result", "err"];
 
     els.pill.textContent = title;
@@ -42,22 +76,70 @@ export function renderResult(result, onProblemClick) {
     els.banner.hidden = false;
     els.banner.dataset.kind = kind;
     els.banner.textContent = bannerText(result);
+    if (note) {
+        const span = document.createElement("span");
+        span.className = "note";
+        span.textContent = note;
+        els.banner.append(span);
+    }
 
-    renderOutput(result);
-    renderProblems(result.problems ?? [], onProblemClick);
+    showFullOutput(result);
+    const problems = result.problems ?? [];
+    renderProblems(problems, onProblemClick);
+    selectTab(problems.length > 0 ? "problems" : "output");
 
     els.compile.textContent = result.compileTimeMs ? `Compile ${result.compileTimeMs} ms` : "";
     els.run.textContent = result.runTimeMs ? `Run ${result.runTimeMs} ms` : "";
     els.exit.textContent = result.exitCode != null ? `Exit code ${result.exitCode}` : "";
+    return problems.length > 0;
+}
+
+/** Complete output of a run: stdout, then stderr in red. */
+export function showFullOutput(result) {
+    writeOutput(result.stdout ?? "", result.stderr ?? "", result.status === "SUCCESS"
+        ? "The program finished without printing anything."
+        : "No output.");
+}
+
+/** Output as it was at one step: the first `length` characters of stdout. */
+export function showOutputAtStep(stdout, length, stderr) {
+    writeOutput(stdout.slice(0, length), stderr ?? "", "Nothing printed yet.");
 }
 
 export function clearOutput() {
     els.banner.hidden = true;
-    els.output.innerHTML = '<span class="placeholder">Press Run to compile and execute your program.</span>';
+    showPlaceholder();
     renderProblems([], null);
     els.pill.textContent = "Ready";
     els.pill.dataset.state = "idle";
     els.compile.textContent = els.run.textContent = els.exit.textContent = "";
+}
+
+function showPlaceholder() {
+    els.output.replaceChildren(placeholder(PLACEHOLDER));
+}
+
+function writeOutput(stdout, stderr, emptyMessage) {
+    els.output.replaceChildren();
+    if (!stdout && !stderr) {
+        els.output.append(placeholder(emptyMessage));
+        return;
+    }
+    if (stdout) els.output.append(document.createTextNode(stdout));
+    if (stderr) {
+        const span = document.createElement("span");
+        span.className = "stderr";
+        span.textContent = (stdout && !stdout.endsWith("\n") ? "\n" : "") + stderr;
+        els.output.append(span);
+    }
+    els.output.scrollTop = els.output.scrollHeight;
+}
+
+function placeholder(text) {
+    const span = document.createElement("span");
+    span.className = "placeholder";
+    span.textContent = text;
+    return span;
 }
 
 function bannerText(result) {
@@ -68,30 +150,6 @@ function bannerText(result) {
         return `${err.exceptionType}${msg}${where}`;
     }
     return result.message ?? "";
-}
-
-function renderOutput(result) {
-    els.output.replaceChildren();
-    const stdout = result.stdout ?? "";
-    // stderr holds stack traces from runtime errors.
-    const stderr = result.stderr ?? "";
-
-    if (!stdout && !stderr) {
-        const empty = document.createElement("span");
-        empty.className = "placeholder";
-        empty.textContent = result.status === "SUCCESS"
-            ? "The program finished without printing anything."
-            : "No output.";
-        els.output.append(empty);
-        return;
-    }
-    if (stdout) els.output.append(document.createTextNode(stdout));
-    if (stderr) {
-        const span = document.createElement("span");
-        span.className = "stderr";
-        span.textContent = (stdout && !stdout.endsWith("\n") ? "\n" : "") + stderr;
-        els.output.append(span);
-    }
 }
 
 function renderProblems(problems, onProblemClick) {

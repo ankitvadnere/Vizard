@@ -21,9 +21,12 @@
             <span>Example</span>
             <select id="example-select"></select>
         </label>
-        <button id="run-button" class="run-button" type="button" title="Run (Ctrl+Enter)">
-            <span class="run-icon" aria-hidden="true">▶</span>
-            <span class="run-label">Run</span>
+        <button id="run-button" class="button secondary" type="button" title="Run at full speed (Ctrl+Enter)">
+            Run
+        </button>
+        <button id="trace-button" class="button primary" type="button" title="Run and record every step (Ctrl+Shift+Enter)">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3v10l6-5z M10 3h2v10h-2z"/></svg>
+            <span class="label">Step through</span>
         </button>
     </div>
 </header>
@@ -32,34 +35,91 @@
     <section class="pane editor-pane" aria-label="Java code">
         <div class="pane-header">
             <h2>Main.java</h2>
-            <span class="hint">Ctrl+Enter to run</span>
+            <span class="hint">Ctrl+Enter runs, Ctrl+Shift+Enter steps through</span>
         </div>
         <div id="editor" class="editor"></div>
+
+        <div id="playback" class="playback" hidden>
+            <div class="playback-row">
+                <div class="transport" role="group" aria-label="Step controls">
+                    <button type="button" data-action="first" aria-label="Back to start (Home)" title="Back to start (Home)">
+                        <svg viewBox="0 0 16 16"><path d="M2 3h2v10H2z M9 3v10L4 8z M15 3v10l-5-5z"/></svg>
+                    </button>
+                    <button type="button" data-action="prev" aria-label="Previous step (Left arrow)" title="Previous step (←)">
+                        <svg viewBox="0 0 16 16"><path d="M4 3h2v10H4z M13 3v10L7 8z"/></svg>
+                    </button>
+                    <button type="button" data-action="play" class="play" aria-label="Play (Space)" title="Play / pause (Space)">
+                        <svg class="icon-play" viewBox="0 0 16 16"><path d="M5 3v10l8-5z"/></svg>
+                        <svg class="icon-pause" viewBox="0 0 16 16"><path d="M4 3h3v10H4z M9 3h3v10H9z"/></svg>
+                    </button>
+                    <button type="button" data-action="next" aria-label="Next step (Right arrow)" title="Next step (→)">
+                        <svg viewBox="0 0 16 16"><path d="M3 3v10l6-5z M10 3h2v10h-2z"/></svg>
+                    </button>
+                    <button type="button" data-action="last" aria-label="Last step (End)" title="Last step (End)">
+                        <svg viewBox="0 0 16 16"><path d="M1 3v10l5-5z M7 3v10l5-5z M12 3h2v10h-2z"/></svg>
+                    </button>
+                </div>
+
+                <input id="step-slider" class="step-slider" type="range" min="0" max="0" value="0" aria-label="Step">
+                <span id="step-counter" class="step-counter">Step 1 of 1</span>
+
+                <label class="speed">
+                    <span class="visually-hidden">Playback speed</span>
+                    <select id="speed-select">
+                        <option value="0.25">0.25×</option>
+                        <option value="0.5">0.5×</option>
+                        <option value="1" selected>1×</option>
+                        <option value="2">2×</option>
+                        <option value="4">4×</option>
+                    </select>
+                </label>
+                <button id="exit-trace" class="text-button" type="button">Exit</button>
+            </div>
+            <p id="step-description" class="step-description" aria-live="polite"></p>
+        </div>
     </section>
 
     <section class="side">
-        <section class="pane output-pane" aria-label="Program output">
+        <section class="pane variables-pane" aria-label="Variables">
             <div class="pane-header">
-                <h2>Output</h2>
-                <button id="clear-output" class="text-button" type="button">Clear</button>
+                <h2>Variables</h2>
+                <span id="frame-label" class="hint"></span>
+            </div>
+            <div id="variables" class="variables"></div>
+        </section>
+
+        <section class="pane stack-pane" aria-label="Call stack">
+            <div class="pane-header">
+                <h2>Call stack</h2>
+                <span id="depth-label" class="hint"></span>
+            </div>
+            <ol id="call-stack" class="call-stack"></ol>
+        </section>
+
+        <section class="pane console-pane" aria-label="Program output">
+            <div class="tabs" role="tablist">
+                <button type="button" role="tab" class="tab" data-tab="output" aria-selected="true">Output</button>
+                <button type="button" role="tab" class="tab" data-tab="problems" aria-selected="false">
+                    Problems <span id="problem-count" class="count">0</span>
+                </button>
+                <button type="button" role="tab" class="tab" data-tab="input" aria-selected="false">
+                    Input <span id="input-dot" class="dot" hidden></span>
+                </button>
+                <button id="clear-output" class="text-button tab-action" type="button">Clear</button>
             </div>
             <div id="result-banner" class="result-banner" hidden></div>
-            <pre id="output" class="output"><span class="placeholder">Press Run to compile and execute your program.</span></pre>
-        </section>
 
-        <section class="pane problems-pane" aria-label="Problems">
-            <div class="pane-header">
-                <h2>Problems <span id="problem-count" class="count">0</span></h2>
+            <div class="tab-panel" data-panel="output" role="tabpanel">
+                <pre id="output" class="output"></pre>
             </div>
-            <ul id="problems" class="problems"></ul>
-        </section>
-
-        <section class="pane input-pane" aria-label="Program input">
-            <div class="pane-header">
-                <h2><label for="stdin">Program input</label></h2>
-                <span class="hint">Read by Scanner(System.in)</span>
+            <div class="tab-panel" data-panel="problems" role="tabpanel" hidden>
+                <ul id="problems" class="problems"></ul>
             </div>
-            <textarea id="stdin" class="stdin" spellcheck="false" placeholder="e.g. 4 5"></textarea>
+            <div class="tab-panel" data-panel="input" role="tabpanel" hidden>
+                <label class="visually-hidden" for="stdin">Program input</label>
+                <textarea id="stdin" class="stdin" spellcheck="false"
+                          placeholder="Text your program reads with Scanner(System.in), e.g. 4 5"></textarea>
+            </div>
         </section>
     </section>
 </main>

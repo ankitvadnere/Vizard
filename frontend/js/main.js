@@ -1,48 +1,145 @@
-// Entry point: wires the editor, controls, and panels together.
+// Entry point: wires the editor, the two run modes, playback and the panels together.
+//
+// Modes:
+//   edit  – normal editing; Run shows output.
+//   trace – a recorded execution is loaded; the controls move through its steps.
+//           Editing the code leaves trace mode, because the steps no longer match it.
 
-import { executeCode, checkHealth } from "./api.js";
+import { executeCode, traceCode, checkHealth } from "./api.js";
 import {
-    initEditor, getCode, setCode, showProblems, markRuntimeErrorLine, clearDiagnostics, goToLine,
+    initEditor, getCode, setCode, onCodeChange, showProblems, markRuntimeErrorLine,
+    clearDiagnostics, goToLine, highlightExecutionLine, clearExecutionLine,
 } from "./editor.js";
-import { showRunning, renderResult, clearOutput } from "./outputPanel.js";
+import {
+    initConsole, showRunning, renderResult, clearOutput, showOutputAtStep, showFullOutput,
+    setStdin, getStdin,
+} from "./outputPanel.js";
 import { EXAMPLES } from "./examples.js";
+import { PlaybackController } from "./playback/PlaybackController.js";
+import { PlaybackBar } from "./playback/PlaybackBar.js";
+import { VariableVisualizer } from "./visualizations/VariableVisualizer.js";
+import { CallStackVisualizer } from "./visualizations/CallStackVisualizer.js";
 
 const runButton = document.getElementById("run-button");
-const runLabel = runButton.querySelector(".run-label");
+const traceButton = document.getElementById("trace-button");
+const traceLabel = traceButton.querySelector(".label");
 const exampleSelect = document.getElementById("example-select");
-const stdinBox = document.getElementById("stdin");
 const backendStatus = document.getElementById("status-backend");
 
-let running = false;
+const playback = new PlaybackController();
+const playbackBar = new PlaybackBar(playback, { onExit: () => exitTrace() });
+const variables = new VariableVisualizer(
+    document.getElementById("variables"), document.getElementById("frame-label"));
+const callStack = new CallStackVisualizer(
+    document.getElementById("call-stack"), document.getElementById("depth-label"));
+
+let busy = false;
+let trace = null; // the loaded TraceResponse while in trace mode
+
+// ---------- Run (full speed) ----------
 
 async function run() {
-    if (running) return;
-    running = true;
-    runButton.disabled = true;
-    runLabel.textContent = "Running";
-    clearDiagnostics();
-    showRunning();
+    if (busy) return;
+    exitTrace();
+    await withBusy("Compiling and running…", async () => {
+        const result = await executeCode(getCode(), getStdin());
+        showRunOutcome(result);
+    });
+}
 
-    try {
-        const result = await executeCode(getCode(), stdinBox.value);
-        renderResult(result, (p) => goToLine(p.line, p.column));
-        showProblems(result.problems ?? []);
-        if (result.runtimeError?.line) {
-            markRuntimeErrorLine(result.runtimeError.line);
+// ---------- Step through ----------
+
+async function stepThrough() {
+    if (busy) return;
+    exitTrace();
+    await withBusy("Recording every step…", async () => {
+        const response = await traceCode(getCode(), getStdin());
+        const execution = response.execution;
+
+        if (response.steps.length === 0) {
+            showRunOutcome(execution);
+            return;
         }
+
+        trace = response;
+        const note = response.truncated
+            ? `Showing the first ${response.steps.length} steps. After that the program ran without recording.`
+            : `${response.steps.length} steps recorded. Use the controls below the editor, or the arrow keys.`;
+        renderResult(execution, jumpToProblem, note);
+        showProblems(execution.problems ?? []);
+
+        playback.load(response.steps);
+        playbackBar.show();
+        renderStep();
+    });
+}
+
+function renderStep() {
+    const step = playback.current;
+    if (!trace || !step) return;
+
+    const kind = step.event === "EXCEPTION" ? "error" : step.event === "RETURN" ? "return" : "next";
+    highlightExecutionLine(step.line, kind);
+    variables.render(step, playback.previous);
+    callStack.render(step);
+
+    // At the last step, also show anything printed afterwards and any stack trace.
+    const execution = trace.execution;
+    if (playback.atEnd) {
+        showFullOutput(execution);
+    } else {
+        showOutputAtStep(execution.stdout ?? "", step.outputLength, "");
+    }
+}
+
+function exitTrace(message) {
+    if (!trace) return;
+    trace = null;
+    playback.clear();
+    playbackBar.hide();
+    clearExecutionLine();
+    variables.showEmpty(message);
+    callStack.showEmpty();
+}
+
+// ---------- Shared ----------
+
+function showRunOutcome(result) {
+    renderResult(result, jumpToProblem);
+    showProblems(result.problems ?? []);
+    if (result.runtimeError?.line) {
+        markRuntimeErrorLine(result.runtimeError.line);
+    }
+}
+
+function jumpToProblem(problem) {
+    goToLine(problem.line, problem.column);
+}
+
+async function withBusy(label, task) {
+    busy = true;
+    runButton.disabled = true;
+    traceButton.disabled = true;
+    traceLabel.textContent = "Working…";
+    clearDiagnostics();
+    showRunning(label);
+    try {
+        await task();
     } finally {
-        running = false;
+        busy = false;
         runButton.disabled = false;
-        runLabel.textContent = "Run";
+        traceButton.disabled = false;
+        traceLabel.textContent = "Step through";
     }
 }
 
 function loadExample(id) {
     const example = EXAMPLES.find((e) => e.id === id);
     if (!example) return;
-    setCode(example.code);
-    stdinBox.value = example.stdin ?? "";
+    setCode(example.code); // also leaves trace mode via onCodeChange
+    setStdin(example.stdin ?? "");
     clearOutput();
+    variables.showEmpty();
 }
 
 function populateExamples() {
@@ -56,11 +153,21 @@ function populateExamples() {
 }
 
 async function start() {
+    initConsole();
     populateExamples();
-    await initEditor(document.getElementById("editor"), EXAMPLES[0].code, run);
+    variables.showEmpty();
+    callStack.showEmpty();
+
+    await initEditor(document.getElementById("editor"), EXAMPLES[0].code, { run, trace: stepThrough });
 
     runButton.addEventListener("click", run);
-    document.getElementById("clear-output").addEventListener("click", clearOutput);
+    traceButton.addEventListener("click", stepThrough);
+    document.getElementById("clear-output").addEventListener("click", () => {
+        exitTrace();
+        clearOutput();
+    });
+    playback.onChange(renderStep);
+    onCodeChange(() => exitTrace("The code changed. Press Step through to record the new version."));
 
     const health = await checkHealth();
     backendStatus.textContent = health

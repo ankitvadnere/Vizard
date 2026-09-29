@@ -9,5 +9,13 @@ package com.vizard.execution.sandbox;
  */
 public interface ExecutionSandbox {
 
-    SandboxResult run(SandboxRequest request);
+    /** Starts the program and returns immediately. */
+    RunningProgram start(SandboxRequest request);
+
+    /** Starts the program and waits for it to finish. */
+    default SandboxResult run(SandboxRequest request) {
+        try (RunningProgram program = start(request)) {
+            return program.awaitCompletion();
+        }
+    }
 }

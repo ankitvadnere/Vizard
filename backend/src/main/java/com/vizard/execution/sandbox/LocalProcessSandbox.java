@@ -37,7 +37,7 @@ public class LocalProcessSandbox implements ExecutionSandbox {
     }
 
     @Override
-    public SandboxResult run(SandboxRequest request) {
+    public RunningProgram start(SandboxRequest request) {
         ProcessBuilder builder = new ProcessBuilder(buildCommand(request))
                 .directory(request.workDir().toFile());
 
@@ -49,47 +49,11 @@ public class LocalProcessSandbox implements ExecutionSandbox {
             env.put("SystemRoot", systemRoot);
         }
 
-        long start = System.nanoTime();
-        Process process;
         try {
-            process = builder.start();
+            return new LocalRunningProgram(builder.start(), request, props.maxOutputBytes());
         } catch (IOException e) {
             throw new UncheckedIOException("Could not start the program process", e);
         }
-
-        Runnable kill = () -> killTree(process);
-        BoundedStreamCollector out = new BoundedStreamCollector(process.getInputStream(), props.maxOutputBytes(), kill);
-        BoundedStreamCollector err = new BoundedStreamCollector(process.getErrorStream(), props.maxOutputBytes(), () -> { });
-        Thread outThread = Thread.ofPlatform().daemon().name("vizard-stdout").start(out);
-        Thread errThread = Thread.ofPlatform().daemon().name("vizard-stderr").start(err);
-
-        writeStdin(process, request.stdin());
-
-        boolean finished;
-        try {
-            finished = process.waitFor(props.timeoutMs(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            finished = false;
-        }
-        if (!finished) {
-            killTree(process);
-        }
-
-        try {
-            process.waitFor(2, TimeUnit.SECONDS); // let the OS release the process
-            outThread.join(1000);
-            errThread.join(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        long durationMs = (System.nanoTime() - start) / 1_000_000;
-        boolean outputExceeded = out.limitExceeded();
-        Integer exitCode = process.isAlive() ? null : process.exitValue();
-
-        return new SandboxResult(out.text(), err.text(), exitCode,
-                !finished && !outputExceeded, outputExceeded, durationMs);
     }
 
     private List<String> buildCommand(SandboxRequest request) {
@@ -108,6 +72,7 @@ public class LocalProcessSandbox implements ExecutionSandbox {
         cmd.add("-Dstdout.encoding=UTF-8");
         cmd.add("-Dstderr.encoding=UTF-8");
         cmd.add("-Djava.io.tmpdir=" + request.workDir());
+        cmd.addAll(request.extraJvmArgs());
         cmd.add("-cp");
         cmd.add(request.classesDir().toString());
         cmd.add(request.mainClass());
@@ -120,18 +85,92 @@ public class LocalProcessSandbox implements ExecutionSandbox {
         return Path.of(System.getProperty("java.home"), "bin", windows ? "java.exe" : "java").toString();
     }
 
-    private static void writeStdin(Process process, String stdin) {
-        try (OutputStream in = process.getOutputStream()) {
-            if (stdin != null && !stdin.isEmpty()) {
-                in.write(stdin.getBytes(StandardCharsets.UTF_8));
-            }
-        } catch (IOException ignored) {
-            // Program exited before reading its input; that's fine.
-        }
-    }
-
     private static void killTree(Process process) {
         process.descendants().forEach(ProcessHandle::destroyForcibly);
         process.destroyForcibly();
+    }
+
+    /** Handle to one started process. */
+    private static final class LocalRunningProgram implements RunningProgram {
+
+        private final Process process;
+        private final long startNanos = System.nanoTime();
+        private volatile long deadlineNanos;
+        private final BoundedStreamCollector out;
+        private final BoundedStreamCollector err;
+        private final Thread outThread;
+        private final Thread errThread;
+        private SandboxResult result;
+
+        LocalRunningProgram(Process process, SandboxRequest request, int maxOutputBytes) {
+            this.process = process;
+            this.deadlineNanos = startNanos + TimeUnit.MILLISECONDS.toNanos(request.timeoutMs());
+            this.out = new BoundedStreamCollector(process.getInputStream(), maxOutputBytes, () -> killTree(process));
+            this.err = new BoundedStreamCollector(process.getErrorStream(), maxOutputBytes, () -> { });
+            this.outThread = Thread.ofPlatform().daemon().name("vizard-stdout").start(out);
+            this.errThread = Thread.ofPlatform().daemon().name("vizard-stderr").start(err);
+            // Own thread: a program paused by the debugger doesn't read stdin, and a big
+            // input would otherwise block us before we attach the debugger.
+            String stdin = request.stdin() == null ? "" : request.stdin();
+            Thread.ofPlatform().daemon().name("vizard-stdin").start(() -> writeStdin(process, stdin));
+        }
+
+        @Override
+        public long remainingMs() {
+            return Math.max(0, TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime()));
+        }
+
+        @Override
+        public void limitRemainingTo(long ms) {
+            deadlineNanos = Math.min(deadlineNanos, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(ms));
+        }
+
+        @Override
+        public synchronized SandboxResult awaitCompletion() {
+            if (result != null) {
+                return result;
+            }
+            boolean finished;
+            try {
+                finished = process.waitFor(remainingMs(), TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                finished = false;
+            }
+            if (!finished) {
+                killTree(process);
+            }
+            try {
+                process.waitFor(2, TimeUnit.SECONDS); // let the OS release the process
+                outThread.join(1000);
+                errThread.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+            boolean outputExceeded = out.limitExceeded();
+            Integer exitCode = process.isAlive() ? null : process.exitValue();
+            result = new SandboxResult(out.text(), err.text(), exitCode,
+                    !finished && !outputExceeded, outputExceeded, durationMs);
+            return result;
+        }
+
+        @Override
+        public void close() {
+            if (process.isAlive()) {
+                killTree(process);
+            }
+        }
+
+        private static void writeStdin(Process process, String stdin) {
+            try (OutputStream in = process.getOutputStream()) {
+                if (!stdin.isEmpty()) {
+                    in.write(stdin.getBytes(StandardCharsets.UTF_8));
+                }
+            } catch (IOException ignored) {
+                // Program exited before reading its input; that's fine.
+            }
+        }
     }
 }

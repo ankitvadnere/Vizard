@@ -19,7 +19,8 @@ import java.util.regex.Pattern;
 
 /**
  * Parses the user's source with JavaParser, finds the class to run, and applies
- * the {@link SafetyPolicy}. In Milestone 2 this AST is what we instrument.
+ * the {@link SafetyPolicy}. Later milestones use this AST to explain what a line does
+ * (comparisons, swaps, loop conditions).
  */
 @Component
 public class SourceAnalyzer {
@@ -42,17 +43,20 @@ public class SourceAnalyzer {
         if (!result.isSuccessful() || result.getResult().isEmpty()) {
             // Still guess the file name so javac can produce its (friendlier) error messages.
             return new SourceAnalysis(null, toProblems(result.getProblems()),
-                    guessPublicClassName(source), null, List.of());
+                    guessPublicClassName(source), null, List.of(), "", List.of());
         }
 
         CompilationUnit cu = result.getResult().get();
-        String packagePrefix = cu.getPackageDeclaration()
-                .map(p -> p.getNameAsString() + ".")
+        String packageName = cu.getPackageDeclaration()
+                .map(p -> p.getNameAsString())
                 .orElse("");
+        String packagePrefix = packageName.isEmpty() ? "" : packageName + ".";
+        List<String> topLevelClasses = new ArrayList<>();
 
         String publicClass = null;
         String mainClass = null;
         for (TypeDeclaration<?> type : cu.getTypes()) {
+            topLevelClasses.add(packagePrefix + type.getNameAsString());
             if (type.isPublic() && publicClass == null) {
                 publicClass = type.getNameAsString();
             }
@@ -66,7 +70,8 @@ public class SourceAnalyzer {
                 : "Main";
         String mainFqn = mainClass == null ? null : packagePrefix + mainClass;
 
-        return new SourceAnalysis(cu, List.of(), fileClass, mainFqn, safetyPolicy.check(cu));
+        return new SourceAnalysis(cu, List.of(), fileClass, mainFqn, safetyPolicy.check(cu),
+                packageName, List.copyOf(topLevelClasses));
     }
 
     private static boolean hasMainMethod(TypeDeclaration<?> type) {
