@@ -3,8 +3,9 @@
 Interactive Java code execution, step-by-step debugging and algorithm visualization, built as a
 Design and Analysis of Algorithms course project.
 
-> Status: **Milestone 2** — run Java safely, then step through its execution forwards and backwards:
-> highlighted line, variables, call stack and output at every step.
+> Status: **Milestone 3** — step through Java forwards and backwards and *see* it run: arrays as boxes with
+> index pointers, compared and changed cells, animated swaps, conditions with their values and result,
+> loop iteration counters, and the call stack.
 
 ## How it works
 
@@ -18,10 +19,14 @@ Spring Boot
    ├─ JavaCompilerService  javax.tools compiler, in-process, annotation processing off
    ├─ LocalProcessSandbox  separate JVM: timeout, -Xmx, output cap, empty env & temp dir
    ├─ RunOutcomeClassifier success / runtime error (with line) / timeout / OOM / output flood
-   └─ (trace only) JdiTraceSession
-         the sandboxed JVM starts paused and connects to Vizard's debugger (JDI);
-         a breakpoint on every line + method-exit watches record the full state:
-         call stack, locals, statics, reachable arrays/objects, output so far
+   └─ (trace only)
+        JdiTraceSession   the sandboxed JVM starts paused and connects to Vizard's debugger (JDI);
+                          a breakpoint on every line + method-exit watches record the full state:
+                          call stack, locals, statics, reachable arrays/objects, output so far
+        CodeModelBuilder  AST → where conditions, loops and array accesses are; which int
+                          variables index which arrays
+        TraceAnnotator    state + code model → per-step insight: condition values and result,
+                          accessed/changed cells, swaps, pointers, loop iterations
    ▼
 JSON → editor highlight, Variables, Call stack, Output, playback controls
 ```
@@ -32,8 +37,18 @@ Tracing uses the Java Debug Interface, the same API IntelliJ's debugger uses, ra
 inserting `trace()` calls into the source. The user's code runs unmodified, so the recorded values
 are exactly what the JVM computed; there is no re-implementation of Java's scoping rules that
 could disagree with the compiler. The cost is speed (about 1,500 steps per second), which is why
-traces are capped. The AST from JavaParser is kept for the semantic layer in later milestones
-(comparisons, swaps, loop iterations).
+traces are capped. The AST from JavaParser provides the meaning on top of the state.
+
+### How a condition's result is decided
+
+For `if (arr[j] > arr[j + 1])` Vizard shows `5 > 2` and `true`. The values come from a small
+evaluator that reads the recorded state; it never runs code, and it treats anything with side
+effects (method calls, `i++`, assignments) as unknown. The true/false result is taken from **what
+actually happened next**: if the next line in the same method call is inside the branch, the
+condition was true. That works even for `if (isPrime(n))`, which the evaluator can't compute.
+For `if`/`while` the evaluator is used first (Vizard stops exactly where those conditions are
+evaluated); for a `for` header it's the other way round, because that stop happens before the
+loop's update runs.
 
 ## Project structure
 
@@ -53,16 +68,19 @@ vizard/
 │       │       ├── analysis/       SourceAnalyzer, SafetyPolicy, SourceAnalysis
 │       │       ├── compile/        JavaCompilerService, CompilationResult
 │       │       ├── sandbox/        ExecutionSandbox, RunningProgram, LocalProcessSandbox, ...
-│       │       └── trace/          JdiTraceSession, HeapReader, TraceRunner, LauncherSource, ...
+│       │       ├── trace/          JdiTraceSession, HeapReader, SameLineLoops, TraceRunner, ...
+│       │       └── insight/        CodeModelBuilder, CodeModel, Expr, ExpressionEvaluator, TraceAnnotator
 │       ├── main/resources/application.properties
-│       └── test/java/com/vizard/execution/   ExecutionServiceTest, TraceServiceTest
+│       └── test/java/com/vizard/execution/   ExecutionServiceTest, TraceServiceTest, InsightTest,
+│                                             insight/CodeModelBuilderTest
 └── frontend/                       Plain HTML/CSS/JS, served by the backend
     ├── index.html
     ├── css/styles.css
     └── js/
         ├── main.js, api.js, editor.js, outputPanel.js, values.js, examples.js
         ├── playback/        PlaybackController, PlaybackBar, describeStep
-        └── visualizations/  VariableVisualizer, CallStackVisualizer
+        └── visualizations/  VisualizationPanel, ArrayVisualizer (SVG), InsightStrip,
+                             CallStackVisualizer, VariableVisualizer
 ```
 
 ## Requirements
@@ -150,6 +168,19 @@ Same request. Response:
 }
 ```
 
+Every step also has an `insight`:
+
+```json
+"insight": {
+  "condition": { "kind": "if", "line": 6, "text": "arr[j] > arr[j + 1]", "explanation": "5 > 2", "result": true },
+  "accesses":  [ { "array": "arr", "ref": 57, "index": 0, "text": "arr[j]", "write": false, "compared": true } ],
+  "changes":   [ { "ref": 57, "indices": [1] } ],
+  "swap":      { "ref": 57, "first": 0, "second": 1 },
+  "pointers":  [ { "array": "arr", "ref": 57, "variable": "j", "index": 0 } ],
+  "loops":     [ { "kind": "for", "line": 5, "variable": "j", "iteration": 1 } ]
+}
+```
+
 Events: `CALL` (first line of a method just called), `LINE` (line about to run), `RETURN`
 (method returning; `returnValue` present unless void), `EXCEPTION` (uncaught; last step).
 `outputLength` is how many characters of `execution.stdout` existed at that step.
@@ -177,10 +208,14 @@ One source file with a `public static void main(String[] args)`; any number of c
 Imports allowed from `java.util`, `java.util.function`, `java.util.stream`, `java.math`.
 Not allowed: file I/O, network, processes, threads, reflection, `System.exit`, native methods.
 
-## Tracing limitations (Milestone 2)
+## Tracing limitations
 
-- A loop written entirely on one line (`for (...) sum += i;`) shows as one step, because the
-  debugger stops at the start of each line. Put the body on its own line to see every iteration.
+- Loops written on one line (`for (...) sum += i;`) are stepped through every iteration (an extra
+  breakpoint is placed on the loop's jump-back target), but they get no iteration counter.
+- When a `for` loop ends, its variable is already out of scope, so the final check shows as
+  `j < 3` is `false` rather than `3 < 3`.
+- Pointers are detected from how variables are used (`arr[j]`, `mid = low + (high - low) / 2`,
+  `i < arr.length`); an index variable used in other ways may not get a caret.
 - At most 3000 steps are recorded; arrays show their first 100 elements and each step keeps up to 150 objects.
 - The first step may be a class's static setup (`static int count = 0;`), which Java really runs before `main`.
 

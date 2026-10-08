@@ -32,8 +32,7 @@ public final class OutputOffsets {
         List<TraceStep> converted = new ArrayList<>(steps.size());
         for (TraceStep s : steps) {
             int chars = charsForBytes(bytesBefore, s.outputLength());
-            converted.add(new TraceStep(s.index(), s.event(), s.line(), s.depth(), s.stack(), s.statics(),
-                    s.heap(), chars, s.returnValue(), s.exceptionType(), s.exceptionMessage()));
+            converted.add(s.withOutputLength(chars));
         }
         return converted;
     }

@@ -50,6 +50,25 @@ export const EXAMPLES = [
 `,
     },
     {
+        id: "arrays",
+        title: "Arrays (sum and max)",
+        code: `public class Main {
+    public static void main(String[] args) {
+        int[] marks = {72, 95, 61, 88};
+        int sum = 0;
+        int max = marks[0];
+        for (int i = 0; i < marks.length; i++) {
+            sum += marks[i];
+            if (marks[i] > max) {
+                max = marks[i];
+            }
+        }
+        System.out.println("Sum: " + sum + ", max: " + max);
+    }
+}
+`,
+    },
+    {
         id: "bubble",
         title: "Bubble sort",
         code: `public class Main {
@@ -70,6 +89,52 @@ export const EXAMPLES = [
             System.out.print(value + " ");
         }
         System.out.println();
+    }
+}
+`,
+    },
+    {
+        id: "selection",
+        title: "Selection sort",
+        code: `public class Main {
+    public static void main(String[] args) {
+        int[] arr = {29, 10, 14, 37, 13};
+        for (int i = 0; i < arr.length - 1; i++) {
+            int min = i;
+            for (int j = i + 1; j < arr.length; j++) {
+                if (arr[j] < arr[min]) {
+                    min = j;
+                }
+            }
+            int temp = arr[i];
+            arr[i] = arr[min];
+            arr[min] = temp;
+        }
+        for (int value : arr) {
+            System.out.print(value + " ");
+        }
+    }
+}
+`,
+    },
+    {
+        id: "insertion",
+        title: "Insertion sort",
+        code: `public class Main {
+    public static void main(String[] args) {
+        int[] arr = {9, 5, 1, 4, 3};
+        for (int i = 1; i < arr.length; i++) {
+            int key = arr[i];
+            int j = i - 1;
+            while (j >= 0 && arr[j] > key) {
+                arr[j + 1] = arr[j];
+                j--;
+            }
+            arr[j + 1] = key;
+        }
+        for (int value : arr) {
+            System.out.print(value + " ");
+        }
     }
 }
 `,

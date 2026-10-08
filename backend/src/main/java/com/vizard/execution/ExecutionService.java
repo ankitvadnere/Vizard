@@ -9,6 +9,8 @@ import com.vizard.execution.analysis.SourceAnalysis;
 import com.vizard.execution.analysis.SourceAnalyzer;
 import com.vizard.execution.compile.CompilationResult;
 import com.vizard.execution.compile.JavaCompilerService;
+import com.vizard.execution.insight.CodeModel;
+import com.vizard.execution.insight.CodeModelBuilder;
 import com.vizard.execution.sandbox.ExecutionSandbox;
 import com.vizard.execution.sandbox.SandboxRequest;
 import com.vizard.execution.sandbox.SandboxResult;
@@ -153,8 +155,19 @@ public class ExecutionService {
             return Preparation.failed(compilationError(compiled));
         }
 
+        CodeModel codeModel = forTracing ? buildCodeModel(analysis) : null;
         return new Preparation(new PreparedProgram(classesDir, runDir, fileName, analysis.mainClassName(),
-                analysis.topLevelClasses(), launcherClass, compiled.durationMs()), null);
+                analysis.topLevelClasses(), launcherClass, compiled.durationMs(), codeModel), null);
+    }
+
+    /** Insights are a bonus: if the analysis trips over unusual code, trace without them. */
+    private static CodeModel buildCodeModel(SourceAnalysis analysis) {
+        try {
+            return CodeModelBuilder.build(analysis.compilationUnit());
+        } catch (RuntimeException e) {
+            log.warn("Could not build the code model; steps will have no insights", e);
+            return CodeModel.empty();
+        }
     }
 
     @FunctionalInterface

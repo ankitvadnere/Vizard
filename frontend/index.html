@@ -79,48 +79,62 @@
         </div>
     </section>
 
-    <section class="side">
-        <section class="pane variables-pane" aria-label="Variables">
-            <div class="pane-header">
-                <h2>Variables</h2>
-                <span id="frame-label" class="hint"></span>
+    <section class="pane viz-pane" aria-label="Visualization">
+        <div class="pane-header">
+            <h2>Visualization</h2>
+            <span id="viz-label" class="hint"></span>
+        </div>
+        <div class="viz-body">
+            <div class="viz-main">
+                <div id="insights" class="insights"></div>
+                <div id="arrays" class="arrays"></div>
             </div>
-            <div id="variables" class="variables"></div>
-        </section>
+            <aside class="viz-side" aria-label="Call stack">
+                <h3>Call stack</h3>
+                <ol id="call-stack" class="call-stack"></ol>
+            </aside>
+        </div>
+        <div id="viz-legend" class="legend" hidden>
+            <span><i class="swatch compared"></i>Compared</span>
+            <span><i class="swatch read"></i>Read</span>
+            <span><i class="swatch target"></i>Written by this line</span>
+            <span><i class="swatch changed"></i>Just changed</span>
+            <span><i class="swatch pointer"></i>Index variable</span>
+        </div>
+    </section>
 
-        <section class="pane stack-pane" aria-label="Call stack">
-            <div class="pane-header">
-                <h2>Call stack</h2>
-                <span id="depth-label" class="hint"></span>
-            </div>
-            <ol id="call-stack" class="call-stack"></ol>
-        </section>
+    <section class="pane variables-pane" aria-label="Variables">
+        <div class="pane-header">
+            <h2>Variables</h2>
+            <span id="frame-label" class="hint"></span>
+        </div>
+        <div id="variables" class="variables"></div>
+    </section>
 
-        <section class="pane console-pane" aria-label="Program output">
-            <div class="tabs" role="tablist">
-                <button type="button" role="tab" class="tab" data-tab="output" aria-selected="true">Output</button>
-                <button type="button" role="tab" class="tab" data-tab="problems" aria-selected="false">
-                    Problems <span id="problem-count" class="count">0</span>
-                </button>
-                <button type="button" role="tab" class="tab" data-tab="input" aria-selected="false">
-                    Input <span id="input-dot" class="dot" hidden></span>
-                </button>
-                <button id="clear-output" class="text-button tab-action" type="button">Clear</button>
-            </div>
-            <div id="result-banner" class="result-banner" hidden></div>
+    <section class="pane console-pane" aria-label="Program output">
+        <div class="tabs" role="tablist">
+            <button type="button" role="tab" class="tab" data-tab="output" aria-selected="true">Output</button>
+            <button type="button" role="tab" class="tab" data-tab="problems" aria-selected="false">
+                Problems <span id="problem-count" class="count">0</span>
+            </button>
+            <button type="button" role="tab" class="tab" data-tab="input" aria-selected="false">
+                Input <span id="input-dot" class="dot" hidden></span>
+            </button>
+            <button id="clear-output" class="text-button tab-action" type="button">Clear</button>
+        </div>
+        <div id="result-banner" class="result-banner" hidden></div>
 
-            <div class="tab-panel" data-panel="output" role="tabpanel">
-                <pre id="output" class="output"></pre>
-            </div>
-            <div class="tab-panel" data-panel="problems" role="tabpanel" hidden>
-                <ul id="problems" class="problems"></ul>
-            </div>
-            <div class="tab-panel" data-panel="input" role="tabpanel" hidden>
-                <label class="visually-hidden" for="stdin">Program input</label>
-                <textarea id="stdin" class="stdin" spellcheck="false"
-                          placeholder="Text your program reads with Scanner(System.in), e.g. 4 5"></textarea>
-            </div>
-        </section>
+        <div class="tab-panel" data-panel="output" role="tabpanel">
+            <pre id="output" class="output"></pre>
+        </div>
+        <div class="tab-panel" data-panel="problems" role="tabpanel" hidden>
+            <ul id="problems" class="problems"></ul>
+        </div>
+        <div class="tab-panel" data-panel="input" role="tabpanel" hidden>
+            <label class="visually-hidden" for="stdin">Program input</label>
+            <textarea id="stdin" class="stdin" spellcheck="false"
+                      placeholder="Text your program reads with Scanner(System.in), e.g. 4 5"></textarea>
+        </div>
     </section>
 </main>
 

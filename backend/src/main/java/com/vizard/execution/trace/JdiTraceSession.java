@@ -208,6 +208,17 @@ public final class JdiTraceSession implements AutoCloseable {
                 bp.setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD);
                 bp.enable();
             }
+            // Loops written on one line jump back into the middle of their line; stop there too.
+            for (Method method : type.methods()) {
+                if (method.isAbstract() || method.isNative() || method.isBridge()) {
+                    continue;
+                }
+                for (long target : SameLineLoops.jumpTargets(method)) {
+                    BreakpointRequest bp = requests.createBreakpointRequest(method.locationOfCodeIndex(target));
+                    bp.setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD);
+                    bp.enable();
+                }
+            }
         } catch (AbsentInformationException ignored) {
             // No line info (not compiled with -g); nothing to step through.
         }
@@ -264,7 +275,13 @@ public final class JdiTraceSession implements AutoCloseable {
 
             TraceStep previous = steps.isEmpty() ? null : steps.get(steps.size() - 1);
             if ("LINE".equals(event)) {
-                if (previous == null || depth > previous.depth()) {
+                // A new frame: deeper than before, or at the same depth right after a return
+                // (e.g. the second call in f(a) + f(b)).
+                boolean afterReturn = previous != null && "RETURN".equals(previous.event())
+                        && depth >= previous.depth();
+                boolean otherMethod = previous != null && depth == previous.depth()
+                        && !sameMethod(previous.stack().get(0), stack.get(0)); // e.g. static setup, then main
+                if (previous == null || depth > previous.depth() || afterReturn || otherMethod) {
                     event = "CALL";
                 } else if (previous.line() == line && previous.depth() == depth
                         && previous.stack().equals(stack) && previous.statics().equals(statics)
@@ -281,7 +298,7 @@ public final class JdiTraceSession implements AutoCloseable {
                     && previous.heap().equals(heap) && previous.outputLength() == outputBytes;
             int index = mergeIntoPrevious ? previous.index() : steps.size();
             TraceStep step = new TraceStep(index, event, line, depth, stack, statics, heap, outputBytes,
-                    returned, exceptionType, exceptionMessage);
+                    returned, exceptionType, exceptionMessage, null);
             if (mergeIntoPrevious) {
                 steps.set(steps.size() - 1, step);
             } else {
@@ -290,6 +307,10 @@ public final class JdiTraceSession implements AutoCloseable {
         } catch (IncompatibleThreadStateException e) {
             // Thread wasn't actually suspended; skip this event.
         }
+    }
+
+    private static boolean sameMethod(FrameSnapshot a, FrameSnapshot b) {
+        return a.className().equals(b.className()) && a.methodName().equals(b.methodName());
     }
 
     private List<FrameSnapshot> captureStack(ThreadReference thread, HeapReader heapReader)

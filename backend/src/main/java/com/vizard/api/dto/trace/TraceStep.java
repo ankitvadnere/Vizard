@@ -22,6 +22,7 @@ import java.util.Map;
  * @param statics       static fields of the user's classes
  * @param heap          arrays/objects reachable from the variables, keyed by id
  * @param outputLength  how many characters of stdout had been printed at this step
+ * @param insight       meaning of the step (conditions, array accesses, swaps, loops); may be null
  */
 public record TraceStep(
         int index,
@@ -34,6 +35,17 @@ public record TraceStep(
         int outputLength,
         ValueSnapshot returnValue,
         String exceptionType,
-        String exceptionMessage
+        String exceptionMessage,
+        StepInsight insight
 ) {
+
+    public TraceStep withOutputLength(int length) {
+        return new TraceStep(index, event, line, depth, stack, statics, heap, length,
+                returnValue, exceptionType, exceptionMessage, insight);
+    }
+
+    public TraceStep withInsight(StepInsight newInsight) {
+        return new TraceStep(index, event, line, depth, stack, statics, heap, outputLength,
+                returnValue, exceptionType, exceptionMessage, newInsight);
+    }
 }

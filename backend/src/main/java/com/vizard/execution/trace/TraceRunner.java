@@ -7,10 +7,14 @@ import com.vizard.api.dto.trace.TraceStep;
 import com.vizard.config.ExecutionProperties;
 import com.vizard.execution.PreparedProgram;
 import com.vizard.execution.RunOutcomeClassifier;
+import com.vizard.execution.insight.CodeModel;
+import com.vizard.execution.insight.TraceAnnotator;
 import com.vizard.execution.sandbox.ExecutionSandbox;
 import com.vizard.execution.sandbox.RunningProgram;
 import com.vizard.execution.sandbox.SandboxRequest;
 import com.vizard.execution.sandbox.SandboxResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -23,6 +27,8 @@ import java.util.stream.Collectors;
  */
 @Component
 public class TraceRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(TraceRunner.class);
 
     private final ExecutionSandbox sandbox;
     private final RunOutcomeClassifier classifier;
@@ -52,9 +58,23 @@ public class TraceRunner {
 
                 ExecutionResponse execution = classifier.classify(result, program.sourceFileName(),
                         program.compileTimeMs());
-                List<TraceStep> steps = OutputOffsets.toCharacterOffsets(recording.steps(), result.stdout());
+                List<TraceStep> steps = annotate(
+                        OutputOffsets.toCharacterOffsets(recording.steps(), result.stdout()), program.codeModel());
                 return new TraceResponse(execution, steps, recording.truncated(), props.maxTraceSteps());
             }
+        }
+    }
+
+    /** Adds conditions, array accesses, swaps and loop counts. Never fails the trace. */
+    private static List<TraceStep> annotate(List<TraceStep> steps, CodeModel model) {
+        if (model == null) {
+            return steps;
+        }
+        try {
+            return TraceAnnotator.annotate(steps, model);
+        } catch (RuntimeException e) {
+            log.warn("Could not annotate the trace; steps will have no insights", e);
+            return steps;
         }
     }
 

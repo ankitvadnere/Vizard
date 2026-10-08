@@ -18,7 +18,7 @@ import { EXAMPLES } from "./examples.js";
 import { PlaybackController } from "./playback/PlaybackController.js";
 import { PlaybackBar } from "./playback/PlaybackBar.js";
 import { VariableVisualizer } from "./visualizations/VariableVisualizer.js";
-import { CallStackVisualizer } from "./visualizations/CallStackVisualizer.js";
+import { VisualizationPanel } from "./visualizations/VisualizationPanel.js";
 
 const runButton = document.getElementById("run-button");
 const traceButton = document.getElementById("trace-button");
@@ -30,11 +30,11 @@ const playback = new PlaybackController();
 const playbackBar = new PlaybackBar(playback, { onExit: () => exitTrace() });
 const variables = new VariableVisualizer(
     document.getElementById("variables"), document.getElementById("frame-label"));
-const callStack = new CallStackVisualizer(
-    document.getElementById("call-stack"), document.getElementById("depth-label"));
+const visualization = new VisualizationPanel();
 
 let busy = false;
 let trace = null; // the loaded TraceResponse while in trace mode
+let lastRenderedIndex = -1; // to animate only when moving forward by exactly one step
 
 // ---------- Run (full speed) ----------
 
@@ -68,6 +68,7 @@ async function stepThrough() {
         renderResult(execution, jumpToProblem, note);
         showProblems(execution.problems ?? []);
 
+        lastRenderedIndex = -1;
         playback.load(response.steps);
         playbackBar.show();
         renderStep();
@@ -81,7 +82,8 @@ function renderStep() {
     const kind = step.event === "EXCEPTION" ? "error" : step.event === "RETURN" ? "return" : "next";
     highlightExecutionLine(step.line, kind);
     variables.render(step, playback.previous);
-    callStack.render(step);
+    visualization.render(step, { animate: playback.index === lastRenderedIndex + 1 && lastRenderedIndex >= 0 });
+    lastRenderedIndex = playback.index;
 
     // At the last step, also show anything printed afterwards and any stack trace.
     const execution = trace.execution;
@@ -99,7 +101,7 @@ function exitTrace(message) {
     playbackBar.hide();
     clearExecutionLine();
     variables.showEmpty(message);
-    callStack.showEmpty();
+    visualization.showEmpty(message);
 }
 
 // ---------- Shared ----------
@@ -140,6 +142,7 @@ function loadExample(id) {
     setStdin(example.stdin ?? "");
     clearOutput();
     variables.showEmpty();
+    visualization.showEmpty();
 }
 
 function populateExamples() {
@@ -156,7 +159,7 @@ async function start() {
     initConsole();
     populateExamples();
     variables.showEmpty();
-    callStack.showEmpty();
+    visualization.showEmpty();
 
     await initEditor(document.getElementById("editor"), EXAMPLES[0].code, { run, trace: stepThrough });
 
