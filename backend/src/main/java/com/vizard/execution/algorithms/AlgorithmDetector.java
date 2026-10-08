@@ -65,8 +65,29 @@ public final class AlgorithmDetector {
                     .or(() -> linearSearch(m));
             d.ifPresent(found::add);
         }
+        found.removeIf(d -> isHelperOfUnknownRecursion(d, cu, found));
         found.sort((a, b) -> Integer.compare(a.line(), b.line()));
         return found;
+    }
+
+    /**
+     * A recognised method called by a recursive method that is not recognised itself, e.g. the
+     * isSafe() scan inside N-Queens backtracking. Its complexity says nothing true about the
+     * program (the recursion dominates), so it is not reported on its own.
+     */
+    private static boolean isHelperOfUnknownRecursion(Detection d, CompilationUnit cu, List<Detection> found) {
+        for (MethodDeclaration caller : cu.findAll(MethodDeclaration.class)) {
+            if (caller.getNameAsString().equals(d.method()) || selfCalls(caller) == 0) {
+                continue;
+            }
+            boolean callsIt = caller.findAll(MethodCallExpr.class).stream()
+                    .anyMatch(c -> c.getNameAsString().equals(d.method()));
+            boolean callerRecognised = found.stream().anyMatch(f -> f.method().equals(caller.getNameAsString()));
+            if (callsIt && !callerRecognised) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---------- sorting ------------------------------------------------------------------
@@ -284,8 +305,8 @@ public final class AlgorithmDetector {
                 boolean stops = !ifStmt.getThenStmt().findAll(ReturnStmt.class).isEmpty()
                         || !ifStmt.getThenStmt().findAll(BreakStmt.class).isEmpty()
                         || ifStmt.getThenStmt() instanceof ReturnStmt || ifStmt.getThenStmt() instanceof BreakStmt;
-                if (!stops) {
-                    continue;
+                if (!stops || returnsFalse(ifStmt.getThenStmt())) {
+                    continue; // "return false" on a match is a validity check (isSafe), not a search
                 }
                 for (BinaryExpr c : relational(ifStmt.getCondition())) {
                     if (c.getOperator() != BinaryExpr.Operator.EQUALS) {
@@ -304,6 +325,16 @@ public final class AlgorithmDetector {
             }
         }
         return Optional.empty();
+    }
+
+    private static boolean returnsFalse(Statement branch) {
+        List<ReturnStmt> returns = new ArrayList<>(branch.findAll(ReturnStmt.class));
+        if (branch instanceof ReturnStmt r) {
+            returns.add(r);
+        }
+        return returns.stream().anyMatch(r -> r.getExpression()
+                .map(e -> e.isBooleanLiteralExpr() && !e.asBooleanLiteralExpr().getValue())
+                .orElse(false));
     }
 
     // ---------- structural helpers ------------------------------------------------------

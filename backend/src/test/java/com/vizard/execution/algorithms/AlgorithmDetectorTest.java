@@ -106,6 +106,74 @@ class AlgorithmDetectorTest {
     }
 
     @Test
+    void theSafetyCheckInsideNQueensIsNotMistakenForLinearSearch() {
+        // A 2D-board N-Queens: isSafe() scans a row and returns false on a queen.
+        assertThat(detect("""
+                class Main {
+                    static int N = 4;
+                    static boolean isSafe(int[][] board, int row, int col) {
+                        for (int i = 0; i < col; i++)
+                            if (board[row][i] == 1)
+                                return false;
+                        return true;
+                    }
+                    static boolean solve(int[][] board, int col) {
+                        if (col >= N) return true;
+                        for (int i = 0; i < N; i++) {
+                            if (isSafe(board, i, col)) {
+                                board[i][col] = 1;
+                                if (solve(board, col + 1)) return true;
+                                board[i][col] = 0;
+                            }
+                        }
+                        return false;
+                    }
+                }
+                """)).isEmpty();
+
+        // A 1D N-Queens (queens[row] = column) where the check is inlined as a helper call.
+        assertThat(detect("""
+                class Main {
+                    static int count = 0;
+                    static boolean safe(int[] queens, int row, int col) {
+                        for (int r = 0; r < row; r++) {
+                            if (queens[r] == col || Math.abs(queens[r] - col) == Math.abs(r - row)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                    static void place(int[] queens, int row, int n) {
+                        if (row == n) { count++; return; }
+                        for (int col = 0; col < n; col++) {
+                            if (safe(queens, row, col)) {
+                                queens[row] = col;
+                                place(queens, row + 1, n);
+                            }
+                        }
+                    }
+                }
+                """)).isEmpty();
+    }
+
+    @Test
+    void aSearchCalledFromPlainCodeIsStillASearch() {
+        assertThat(detect("""
+                class Main {
+                    static boolean contains(int[] a, int x) {
+                        for (int i = 0; i < a.length; i++) {
+                            if (a[i] == x) return true;
+                        }
+                        return false;
+                    }
+                    public static void main(String[] args) {
+                        System.out.println(contains(new int[]{4, 8, 15}, 8));
+                    }
+                }
+                """)).extracting(d -> d.algorithm()).containsExactly(Algorithm.LINEAR_SEARCH);
+    }
+
+    @Test
     void boundFormulasMatchHandCalculations() {
         assertThat(BoundFormula.HALF_SQUARE.apply(4)).isEqualTo(6);
         assertThat(BoundFormula.HALF_SQUARE.apply(5)).isEqualTo(10);
