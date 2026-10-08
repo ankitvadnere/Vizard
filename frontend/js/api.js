@@ -38,7 +38,7 @@ export async function traceCode(code, stdin) {
         const trace = await post("/trace", { code, stdin });
         // Validation errors come back as a plain ExecutionResponse.
         if (!trace.execution) {
-            return { execution: trace, steps: [], truncated: false };
+            return { execution: trace, steps: [], truncated: false, analysis: null };
         }
         return trace;
     } catch {
@@ -46,7 +46,18 @@ export async function traceCode(code, stdin) {
             execution: unreachable("Could not reach the Vizard backend. Is it running?"),
             steps: [],
             truncated: false,
+            analysis: null,
         };
+    }
+}
+
+/** The example programs, grouped for the menu. Resolves to [] if the backend is unreachable. */
+export async function fetchExamples() {
+    try {
+        const response = await fetch(`${API_BASE}/examples`);
+        return response.ok ? await response.json() : [];
+    } catch {
+        return [];
     }
 }
 

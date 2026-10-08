@@ -298,7 +298,7 @@ public final class JdiTraceSession implements AutoCloseable {
                     && previous.heap().equals(heap) && previous.outputLength() == outputBytes;
             int index = mergeIntoPrevious ? previous.index() : steps.size();
             TraceStep step = new TraceStep(index, event, line, depth, stack, statics, heap, outputBytes,
-                    returned, exceptionType, exceptionMessage, null);
+                    returned, exceptionType, exceptionMessage, null, null);
             if (mergeIntoPrevious) {
                 steps.set(steps.size() - 1, step);
             } else {

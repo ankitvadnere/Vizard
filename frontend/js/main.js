@@ -5,7 +5,7 @@
 //   trace – a recorded execution is loaded; the controls move through its steps.
 //           Editing the code leaves trace mode, because the steps no longer match it.
 
-import { executeCode, traceCode, checkHealth } from "./api.js";
+import { executeCode, traceCode, checkHealth, fetchExamples } from "./api.js";
 import {
     initEditor, getCode, setCode, onCodeChange, showProblems, markRuntimeErrorLine,
     clearDiagnostics, goToLine, highlightExecutionLine, clearExecutionLine,
@@ -14,11 +14,12 @@ import {
     initConsole, showRunning, renderResult, clearOutput, showOutputAtStep, showFullOutput,
     setStdin, getStdin,
 } from "./outputPanel.js";
-import { EXAMPLES } from "./examples.js";
 import { PlaybackController } from "./playback/PlaybackController.js";
 import { PlaybackBar } from "./playback/PlaybackBar.js";
 import { VariableVisualizer } from "./visualizations/VariableVisualizer.js";
 import { VisualizationPanel } from "./visualizations/VisualizationPanel.js";
+import { ComplexityPanel } from "./visualizations/ComplexityPanel.js";
+import { createTabs } from "./tabs.js";
 
 const runButton = document.getElementById("run-button");
 const traceButton = document.getElementById("trace-button");
@@ -31,6 +32,17 @@ const playbackBar = new PlaybackBar(playback, { onExit: () => exitTrace() });
 const variables = new VariableVisualizer(
     document.getElementById("variables"), document.getElementById("frame-label"));
 const visualization = new VisualizationPanel();
+const complexity = new ComplexityPanel(
+    document.getElementById("complexity"), document.getElementById("complexity-dot"));
+const leftTabs = createTabs(document.querySelector(".variables-pane"));
+
+const FALLBACK_CODE = `public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello, Vizard!");
+    }
+}
+`;
+let examples = [];
 
 let busy = false;
 let trace = null; // the loaded TraceResponse while in trace mode
@@ -69,6 +81,7 @@ async function stepThrough() {
         showProblems(execution.problems ?? []);
 
         lastRenderedIndex = -1;
+        complexity.load(response.analysis, response.truncated);
         playback.load(response.steps);
         playbackBar.show();
         renderStep();
@@ -82,7 +95,11 @@ function renderStep() {
     const kind = step.event === "EXCEPTION" ? "error" : step.event === "RETURN" ? "return" : "next";
     highlightExecutionLine(step.line, kind);
     variables.render(step, playback.previous);
-    visualization.render(step, { animate: playback.index === lastRenderedIndex + 1 && lastRenderedIndex >= 0 });
+    visualization.render(step, {
+        animate: playback.index === lastRenderedIndex + 1 && lastRenderedIndex >= 0,
+        previous: playback.previous,
+    });
+    complexity.render(step);
     lastRenderedIndex = playback.index;
 
     // At the last step, also show anything printed afterwards and any stack trace.
@@ -102,6 +119,7 @@ function exitTrace(message) {
     clearExecutionLine();
     variables.showEmpty(message);
     visualization.showEmpty(message);
+    complexity.showEmpty(message);
 }
 
 // ---------- Shared ----------
@@ -136,32 +154,45 @@ async function withBusy(label, task) {
 }
 
 function loadExample(id) {
-    const example = EXAMPLES.find((e) => e.id === id);
+    const example = examples.find((e) => e.id === id);
     if (!example) return;
     setCode(example.code); // also leaves trace mode via onCodeChange
     setStdin(example.stdin ?? "");
     clearOutput();
     variables.showEmpty();
     visualization.showEmpty();
+    complexity.showEmpty();
+    leftTabs.select("variables");
 }
 
+/** Example menu with one group per topic (Basics, Searching, Sorting). */
 function populateExamples() {
-    for (const e of EXAMPLES) {
+    const groups = new Map();
+    for (const e of examples) {
+        if (!groups.has(e.group)) {
+            const optgroup = document.createElement("optgroup");
+            optgroup.label = e.group;
+            groups.set(e.group, optgroup);
+            exampleSelect.append(optgroup);
+        }
         const option = document.createElement("option");
         option.value = e.id;
         option.textContent = e.title;
-        exampleSelect.append(option);
+        groups.get(e.group).append(option);
     }
     exampleSelect.addEventListener("change", () => loadExample(exampleSelect.value));
 }
 
 async function start() {
     initConsole();
+    examples = await fetchExamples();
     populateExamples();
     variables.showEmpty();
     visualization.showEmpty();
+    complexity.showEmpty();
 
-    await initEditor(document.getElementById("editor"), EXAMPLES[0].code, { run, trace: stepThrough });
+    await initEditor(document.getElementById("editor"), examples[0]?.code ?? FALLBACK_CODE,
+        { run, trace: stepThrough });
 
     runButton.addEventListener("click", run);
     traceButton.addEventListener("click", stepThrough);

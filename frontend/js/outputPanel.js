@@ -9,8 +9,8 @@ const els = {
     compile: document.getElementById("status-compile"),
     run: document.getElementById("status-run"),
     exit: document.getElementById("status-exit"),
-    tabs: [...document.querySelectorAll(".tab")],
-    panels: [...document.querySelectorAll(".tab-panel")],
+    tabs: [...document.querySelectorAll(".console-pane .tab")],
+    panels: [...document.querySelectorAll(".console-pane .tab-panel")],
     stdin: document.getElementById("stdin"),
     inputDot: document.getElementById("input-dot"),
 };

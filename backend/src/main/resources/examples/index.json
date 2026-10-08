@@ -1,0 +1,16 @@
+[
+  { "id": "hello",          "title": "Hello, Vizard",          "group": "Basics" },
+  { "id": "variables",      "title": "Basic variables",        "group": "Basics" },
+  { "id": "loops",          "title": "Loops",                  "group": "Basics" },
+  { "id": "arrays",         "title": "Arrays (sum and max)",   "group": "Basics" },
+  { "id": "recursion",      "title": "Recursion (factorial)",  "group": "Basics" },
+  { "id": "input",          "title": "Reading input",          "group": "Basics", "stdin": "4 5" },
+  { "id": "runtime-error",  "title": "Runtime error demo",     "group": "Basics" },
+  { "id": "linear-search",  "title": "Linear search",          "group": "Searching", "algorithm": "linear-search" },
+  { "id": "binary-search",  "title": "Binary search",          "group": "Searching", "algorithm": "binary-search" },
+  { "id": "bubble-sort",    "title": "Bubble sort",            "group": "Sorting",   "algorithm": "bubble-sort" },
+  { "id": "selection-sort", "title": "Selection sort",         "group": "Sorting",   "algorithm": "selection-sort" },
+  { "id": "insertion-sort", "title": "Insertion sort",         "group": "Sorting",   "algorithm": "insertion-sort" },
+  { "id": "merge-sort",     "title": "Merge sort",             "group": "Sorting",   "algorithm": "merge-sort" },
+  { "id": "quick-sort",     "title": "Quick sort",             "group": "Sorting",   "algorithm": "quick-sort" }
+]

@@ -1,5 +1,6 @@
 package com.vizard.execution;
 
+import com.vizard.execution.algorithms.Detection;
 import com.vizard.execution.insight.CodeModel;
 
 import java.nio.file.Path;
@@ -13,6 +14,7 @@ import java.util.List;
  * @param userClassNames   fully-qualified top-level classes declared by the user
  * @param launcherClassName Vizard's generated entry point (tracing only, else null)
  * @param codeModel        line-level facts from the AST used to explain steps (tracing only, else null)
+ * @param algorithms       algorithms recognised in the source (tracing only, else empty)
  */
 public record PreparedProgram(
         Path classesDir,
@@ -22,6 +24,7 @@ public record PreparedProgram(
         List<String> userClassNames,
         String launcherClassName,
         long compileTimeMs,
-        CodeModel codeModel
+        CodeModel codeModel,
+        List<Detection> algorithms
 ) {
 }

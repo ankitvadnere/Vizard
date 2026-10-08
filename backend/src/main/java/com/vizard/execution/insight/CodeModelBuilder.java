@@ -3,6 +3,7 @@ package com.vizard.execution.insight;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.ArrayAccessExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
@@ -27,6 +28,7 @@ import com.vizard.execution.insight.CodeModel.ConditionSite;
 import com.vizard.execution.insight.CodeModel.LoopSite;
 import com.vizard.execution.insight.CodeModel.MethodSite;
 import com.vizard.execution.insight.CodeModel.PointerSpec;
+import com.vizard.execution.insight.CodeModel.RangeSpec;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -93,7 +95,8 @@ public final class CodeModelBuilder {
         List<MethodSite> methods = new ArrayList<>();
         for (CallableDeclaration<?> m : cu.findAll(CallableDeclaration.class)) {
             String name = m.isConstructorDeclaration() ? "<init>" : m.getNameAsString();
-            methods.add(new MethodSite(name, line(m), endLine(m), pointers(m)));
+            List<PointerSpec> pointers = pointers(m);
+            methods.add(new MethodSite(name, line(m), endLine(m), pointers, ranges(m, pointers)));
         }
 
         return new CodeModel(conditions, loops, accesses, methods);
@@ -159,6 +162,109 @@ public final class CodeModelBuilder {
             }
         }
         return specs;
+    }
+
+    // ---------- active ranges -----------------------------------------------------------
+
+    /**
+     * The part of an array a method works on, recognised in two shapes:
+     * <ul>
+     *   <li>a loop that halves a range: {@code while (low <= high)} whose body computes a midpoint
+     *       from low and high (binary search, iterative)</li>
+     *   <li>a divide-and-conquer guard on two int parameters: {@code if (left < right)} (one
+     *       recursive call of merge sort, quick sort, recursive binary search)</li>
+     * </ul>
+     * Other comparisons, such as {@code while (i <= mid && j <= right)} in a merge, are scans, not ranges.
+     */
+    private static List<RangeSpec> ranges(CallableDeclaration<?> method, List<PointerSpec> pointers) {
+        List<Parameter> arrayParams = method.getParameters().stream()
+                .filter(p -> p.getType().isArrayType()).toList();
+        List<String> intParams = new ArrayList<>();
+        for (Parameter p : method.getParameters()) {
+            if (p.getType().asString().equals("int")) {
+                intParams.add(p.getNameAsString());
+            }
+        }
+
+        Map<String, RangeSpec> found = new LinkedHashMap<>();
+        for (WhileStmt loop : method.findAll(WhileStmt.class)) {
+            // "while (low <= high)" or "while (high >= low)": both mean the range is not empty.
+            rangeBounds(loop.getCondition(), true).ifPresent(names -> {
+                if (computesMidpoint(loop.getBody(), names[0], names[1])) {
+                    Expr array = arrayFor(names, pointers, arrayParams);
+                    if (array != null) {
+                        found.putIfAbsent(names[0] + "|" + names[1], new RangeSpec(array, names[0], names[1]));
+                    }
+                }
+            });
+        }
+        for (IfStmt guard : method.findAll(IfStmt.class)) {
+            // "if (lo < hi)" or "if (lo > hi) return -1": the start is whichever parameter comes first.
+            rangeBounds(guard.getCondition(), false).ifPresent(pair -> {
+                if (intParams.contains(pair[0]) && intParams.contains(pair[1])) {
+                    String[] names = intParams.indexOf(pair[0]) < intParams.indexOf(pair[1])
+                            ? pair : new String[]{pair[1], pair[0]};
+                    Expr array = arrayFor(names, pointers, arrayParams);
+                    if (array != null) {
+                        found.putIfAbsent(names[0] + "|" + names[1], new RangeSpec(array, names[0], names[1]));
+                    }
+                }
+            });
+        }
+        return new ArrayList<>(found.values());
+    }
+
+    /**
+     * The whole condition compares two plain names. Returns {start, end}: for a less-than test
+     * that's {left, right}; for greater-than it's flipped when the test means "not empty".
+     */
+    private static Optional<String[]> rangeBounds(Expression condition, boolean meansNotEmpty) {
+        Expression c = condition;
+        while (c.isEnclosedExpr()) {
+            c = c.asEnclosedExpr().getInner();
+        }
+        if (!c.isBinaryExpr()) {
+            return Optional.empty();
+        }
+        BinaryExpr b = c.asBinaryExpr();
+        BinaryExpr.Operator op = b.getOperator();
+        boolean less = op == BinaryExpr.Operator.LESS || op == BinaryExpr.Operator.LESS_EQUALS;
+        boolean greater = op == BinaryExpr.Operator.GREATER || op == BinaryExpr.Operator.GREATER_EQUALS;
+        if (!(less || greater) || !b.getLeft().isNameExpr() || !b.getRight().isNameExpr()) {
+            return Optional.empty();
+        }
+        String left = b.getLeft().asNameExpr().getNameAsString();
+        String right = b.getRight().asNameExpr().getNameAsString();
+        return Optional.of(greater && meansNotEmpty ? new String[]{right, left} : new String[]{left, right});
+    }
+
+    /** Somewhere in the body: x = (lo + hi) / 2, lo + (hi - lo) / 2, (lo + hi) >>> 1 ... */
+    private static boolean computesMidpoint(Node body, String lo, String hi) {
+        List<Expression> values = new ArrayList<>();
+        body.findAll(VariableDeclarator.class).forEach(v -> v.getInitializer().ifPresent(values::add));
+        body.findAll(AssignExpr.class).forEach(a -> values.add(a.getValue()));
+        for (Expression value : values) {
+            Set<String> used = names(value);
+            boolean halves = value.findAll(BinaryExpr.class).stream().anyMatch(b ->
+                    (b.getOperator() == BinaryExpr.Operator.DIVIDE && b.getRight().toString().equals("2"))
+                            || ((b.getOperator() == BinaryExpr.Operator.SIGNED_RIGHT_SHIFT
+                            || b.getOperator() == BinaryExpr.Operator.UNSIGNED_RIGHT_SHIFT)
+                            && b.getRight().toString().equals("1")));
+            if (halves && used.contains(lo) && used.contains(hi)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The array both names index, or else the method's only array parameter. */
+    private static Expr arrayFor(String[] names, List<PointerSpec> pointers, List<Parameter> arrayParams) {
+        for (PointerSpec spec : pointers) {
+            if (spec.variables().contains(names[0]) && spec.variables().contains(names[1])) {
+                return spec.array();
+            }
+        }
+        return arrayParams.size() == 1 ? new Expr.Name(arrayParams.get(0).getNameAsString()) : null;
     }
 
     private static Set<String> names(Expression e) {

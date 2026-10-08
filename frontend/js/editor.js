@@ -36,6 +36,7 @@ importScripts("${MONACO_BASE}/vs/base/worker/workerMain.js");`;
                 tabSize: 4,
                 renderLineHighlight: "none", // the execution line has its own highlight
                 glyphMargin: true,
+                stickyScroll: { enabled: false }, // pinned headers could cover the line being executed
                 padding: { top: 10 },
             });
             errorDecorations = editor.createDecorationsCollection();

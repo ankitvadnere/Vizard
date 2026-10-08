@@ -18,6 +18,9 @@ export function describeStep(step, isFirst) {
             return `${simpleClassName(step.exceptionType)} thrown at line ${step.line}${message}`;
         }
         default:
+            if (step.insight?.loopBackTo) {
+                return `End of the loop body: back to line ${step.insight.loopBackTo} to check the condition again`;
+            }
             return `About to run line ${step.line}`;
     }
 }

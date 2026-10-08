@@ -3,9 +3,23 @@
 Interactive Java code execution, step-by-step debugging and algorithm visualization, built as a
 Design and Analysis of Algorithms course project.
 
-> Status: **Milestone 3** — step through Java forwards and backwards and *see* it run: arrays as boxes with
-> index pointers, compared and changed cells, animated swaps, conditions with their values and result,
-> loop iteration counters, and the call stack.
+> Status: **Milestone 4** — step through Java forwards and backwards and *see* it run (arrays, pointers,
+> swaps, conditions, loops, call stack), with live operation counts and complexity analysis for the
+> sorting and searching algorithms taught in DAA.
+
+## Screenshots
+
+Bubble sort, the step that completes a swap: both cells highlighted, the Swaps counter just increased.
+
+![Bubble sort swap](docs/screenshots/bubble-sort-swap.png)
+
+Binary search: cells outside `low..high` are dimmed, the step explains the jump back to the loop condition.
+
+![Binary search range](docs/screenshots/binary-search-range.png)
+
+Merge sort finished: the Complexity tab compares the worst case for n = 7 with this run's count.
+
+![Merge sort complexity](docs/screenshots/merge-sort-complexity.png)
 
 ## How it works
 
@@ -26,7 +40,10 @@ Spring Boot
         CodeModelBuilder  AST → where conditions, loops and array accesses are; which int
                           variables index which arrays
         TraceAnnotator    state + code model → per-step insight: condition values and result,
-                          accessed/changed cells, swaps, pointers, loop iterations
+                          accessed/changed cells, swaps, pointers, loop iterations, active range,
+                          and running statistics (comparisons, swaps, reads, writes, calls, depth)
+        AlgorithmDetector AST → recognised algorithms (by structure, not by name) →
+        AlgorithmCatalog  best / average / worst / space, with worst-case counts for this run's n
    ▼
 JSON → editor highlight, Variables, Call stack, Output, playback controls
 ```
@@ -38,6 +55,39 @@ inserting `trace()` calls into the source. The user's code runs unmodified, so t
 are exactly what the JVM computed; there is no re-implementation of Java's scoping rules that
 could disagree with the compiler. The cost is speed (about 1,500 steps per second), which is why
 traces are capped. The AST from JavaParser provides the meaning on top of the state.
+
+### How algorithms are recognised
+
+`AlgorithmDetector` matches the defining *structure* of each algorithm in the AST; method names are
+never used. For example, bubble sort = two nested loops + an `if` comparing neighbouring elements
+`a[j]` and `a[j + 1]` + a swap inside that `if`. Recognisers exist for bubble, selection, insertion,
+merge and quick sort and for linear and binary search. Each match records its evidence in plain words
+("Compares neighbouring elements arr[j] and arr[j + 1] (line 7)"), shown in the Complexity tab.
+
+The complexity itself is a **known-algorithm mapping** (`AlgorithmCatalog`), adjusted for details
+Vizard can see: bubble sort's best case is O(n) only if it has an early-exit flag; recursive binary
+search needs O(log n) space. Code that matches nothing gets no complexity claim; Vizard does not
+pretend to derive the complexity of arbitrary code.
+
+For the input of the current run (n = length of the largest array used), the catalogue also gives
+the worst-case number of element comparisons, e.g. n(n−1)/2 = 6 for bubble sort on 4 elements,
+shown next to the live count.
+
+### How operations are counted
+
+Every step carries running totals up to that step, so stepping back rewinds them:
+
+| Counter | Counts |
+|---|---|
+| Comparisons | evaluated conditions that compared at least one array element (`arr[j] > arr[j + 1]`, `arr[mid] == target`); short-circuited parts are not counted |
+| Swaps | two cells exchanging values, written from different lines (`a[i] = a[j]; a[j] = t;`) or a `swap()` call. Copying a temp array back in merge sort is *not* a swap |
+| Array reads / writes | element accesses by lines that ran |
+| Loop iterations | iterations started, in any loop |
+| Method calls | calls to your methods and constructors (main not counted) |
+| Max depth | deepest call stack (1 = only main) |
+
+The counts for the examples were checked against independent implementations (for instance quick
+sort on {10, 80, 30, 90, 40, 50, 70}: 13 comparisons, 5 swaps).
 
 ### How a condition's result is decided
 
@@ -69,18 +119,22 @@ vizard/
 │       │       ├── compile/        JavaCompilerService, CompilationResult
 │       │       ├── sandbox/        ExecutionSandbox, RunningProgram, LocalProcessSandbox, ...
 │       │       ├── trace/          JdiTraceSession, HeapReader, SameLineLoops, TraceRunner, ...
-│       │       └── insight/        CodeModelBuilder, CodeModel, Expr, ExpressionEvaluator, TraceAnnotator
+│       │       ├── insight/        CodeModelBuilder, CodeModel, Expr, ExpressionEvaluator, TraceAnnotator
+│       │       └── algorithms/     AlgorithmDetector, AlgorithmCatalog, Algorithm, Detection
+│       ├── main/java/com/vizard/examples/   ExampleCatalog
+│       ├── main/resources/examples/         index.json + one .java file per example
 │       ├── main/resources/application.properties
-│       └── test/java/com/vizard/execution/   ExecutionServiceTest, TraceServiceTest, InsightTest,
-│                                             insight/CodeModelBuilderTest
+│       └── test/java/com/vizard/   execution/ExecutionServiceTest, TraceServiceTest, InsightTest,
+│                                   StatisticsTest, insight/CodeModelBuilderTest,
+│                                   algorithms/AlgorithmDetectorTest, examples/ExamplesTest
 └── frontend/                       Plain HTML/CSS/JS, served by the backend
     ├── index.html
     ├── css/styles.css
     └── js/
-        ├── main.js, api.js, editor.js, outputPanel.js, values.js, examples.js
+        ├── main.js, api.js, editor.js, outputPanel.js, values.js, tabs.js
         ├── playback/        PlaybackController, PlaybackBar, describeStep
-        └── visualizations/  VisualizationPanel, ArrayVisualizer (SVG), InsightStrip,
-                             CallStackVisualizer, VariableVisualizer
+        └── visualizations/  VisualizationPanel, ArrayVisualizer (SVG), InsightStrip, StatsBar,
+                             ComplexityPanel, CallStackVisualizer, VariableVisualizer
 ```
 
 ## Requirements
@@ -181,9 +235,38 @@ Every step also has an `insight`:
 }
 ```
 
+plus `"ranges": [ { "array": "arr", "fromVariable": "low", "from": 4, "toVariable": "high", "to": 6 } ]`
+and `"loopBackTo": 5` when stopped on a loop's closing brace. Each step also has running `stats`:
+
+```json
+"stats": { "steps": 8, "comparisons": 1, "swaps": 1, "arrayReads": 4, "arrayWrites": 2,
+           "methodCalls": 0, "maxDepth": 1, "loopIterations": 2 }
+```
+
+The response has an `analysis`:
+
+```json
+"analysis": {
+  "input": { "name": "arr", "n": 4 },
+  "algorithms": [ {
+    "id": "bubble-sort", "name": "Bubble sort", "category": "Sorting", "method": "main", "line": 2,
+    "evidence": [ "Two nested loops in main().", "Compares neighbouring elements arr[j] and arr[j + 1] (line 7)." ],
+    "complexity": { "best": "O(n²)", "average": "O(n²)", "worst": "O(n²)", "space": "O(1)", "stable": true, "note": "..." },
+    "bound": { "metric": "comparisons", "description": "element comparisons (exactly, for any input)",
+               "formula": "n(n−1)/2", "value": 6, "scope": "program" }
+  } ]
+}
+```
+
 Events: `CALL` (first line of a method just called), `LINE` (line about to run), `RETURN`
 (method returning; `returnValue` present unless void), `EXCEPTION` (uncaught; last step).
 `outputLength` is how many characters of `execution.stdout` existed at that step.
+
+### `GET /api/examples`
+
+The Example menu: `[{ "id", "title", "group", "code", "stdin"?, "algorithm"? }]`, read from
+`backend/src/main/resources/examples/`. To add an example, add a `.java` file there and a line in
+`index.json`; `ExamplesTest` then checks it compiles, traces and is recognised as `algorithm`.
 
 ### `GET /api/health`
 
@@ -214,6 +297,10 @@ Not allowed: file I/O, network, processes, threads, reflection, `System.exit`, n
   breakpoint is placed on the loop's jump-back target), but they get no iteration counter.
 - When a `for` loop ends, its variable is already out of scope, so the final check shows as
   `j < 3` is `false` rather than `3 < 3`.
+- Algorithm recognition covers the textbook shapes of seven algorithms. Unusual implementations
+  (e.g. a three-way quick sort, or merge sort without a separate merge loop) may not be recognised,
+  in which case no complexity is claimed. Counts stay exact either way.
+- Comparisons are counted per evaluated condition, so `if (a[i] > x && a[i] < y)` counts once.
 - Pointers are detected from how variables are used (`arr[j]`, `mid = low + (high - low) / 2`,
   `i < arr.length`); an index variable used in other ways may not get a caret.
 - At most 3000 steps are recorded; arrays show their first 100 elements and each step keeps up to 150 objects.

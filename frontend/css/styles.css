@@ -21,6 +21,9 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute must win over any display rule below (flex, grid, inline-block...). */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; margin: 0; }
 
 body {
@@ -209,7 +212,7 @@ select {
 .runtime-error-glyph { background: var(--err); width: 4px !important; margin-left: 6px; border-radius: 2px; }
 
 /* ---------- Variables ---------- */
-.variables { overflow: auto; flex: 1; padding: 6px 0; }
+.variables { overflow: auto; flex: 1; padding: 6px 0; height: 100%; }
 .var-group { padding: 4px 14px 2px; color: var(--muted); font-size: 12px; }
 .var-row {
     display: grid;
@@ -299,6 +302,9 @@ select {
 .array-svg .cell.changed rect { fill: rgba(240, 180, 41, 0.32); }
 .array-svg .cell.changed text { fill: #ffe2a0; }
 .array-svg .cell.flash rect { animation: cell-flash 600ms ease-out; }
+.array-svg .cell.outside { opacity: 0.32; }
+.array-svg .range-bracket { fill: none; stroke: var(--ok); stroke-width: 1.5; }
+.array-svg .range-label { fill: var(--ok); font: 11px var(--font-code); text-anchor: middle; }
 .array-svg .ghost { fill: none; stroke: var(--line); stroke-dasharray: 3 3; rx: 5; }
 .array-svg .more { fill: var(--muted); font: 12px var(--font-ui); dominant-baseline: central; }
 .array-svg .pointer-caret { fill: var(--amber); }
@@ -342,7 +348,68 @@ select {
 .swatch.read { border: 2px solid #7aa7e0; }
 .swatch.target { border: 2px dashed var(--amber); }
 .swatch.changed { background: rgba(240, 180, 41, 0.32); }
+.swatch.outside { opacity: 0.35; background: var(--raised); }
 .swatch.pointer { border: 0; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--amber); border-radius: 0; }
+
+/* ---------- Statistics bar ---------- */
+.stats-bar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    border-top: 1px solid var(--line);
+}
+.stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 4px;
+    border-right: 1px solid var(--line);
+    transition: background-color 300ms;
+}
+.stat:last-child { border-right: 0; }
+.stat-value { font: 600 16px var(--font-code); font-variant-numeric: tabular-nums; }
+.stat-label { color: var(--muted); font-size: 11px; text-align: center; }
+.stat.bumped { background: var(--amber-soft); }
+.stat.bumped .stat-value { color: var(--amber); }
+
+/* ---------- Complexity ---------- */
+.complexity { overflow: auto; flex: 1; padding: 10px 14px; display: flex; flex-direction: column; gap: 12px; }
+.complexity-empty { margin: 0; color: var(--text); }
+.complexity-footnote { margin: 0; color: var(--muted); font-size: 12px; }
+.algo-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pane);
+    padding: 10px 12px;
+    background: var(--raised);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.algo-card header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.algo-card h3 { margin: 0; font-size: 15px; }
+.algo-where { color: var(--muted); font: 12px var(--font-code); }
+.algo-tag {
+    margin-left: auto;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 11px;
+}
+.big-o { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 6px; margin: 0; }
+.big-o div { background: var(--panel); border-radius: var(--radius-control); padding: 4px 8px; }
+.big-o dt { color: var(--muted); font-size: 11px; }
+.big-o dd { margin: 0; font: 600 14px var(--font-code); }
+.algo-note { margin: 0; font-size: 13px; color: var(--text); }
+.bound { display: flex; flex-direction: column; gap: 6px; }
+.bound-theory { margin: 0; font-size: 13px; }
+.bound-theory code { font-family: var(--font-code); color: var(--amber); }
+.bound-row { display: flex; align-items: center; gap: 10px; }
+.bound-track { flex: 1; height: 8px; border-radius: 999px; background: var(--panel); overflow: hidden; }
+.bound-fill { height: 100%; width: 0; background: var(--amber); transition: width 200ms; }
+.bound-fill.over { background: var(--err); }
+.bound-label { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.algo-why summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.algo-why ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
 
 /* ---------- Console (tabs) ---------- */
 .tabs {
@@ -446,6 +513,8 @@ select {
     }
     .viz-body { grid-template-columns: 1fr; }
     .viz-side { border-left: 0; border-top: 1px solid var(--line); }
+    .stats-bar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .stat { border-bottom: 1px solid var(--line); }
     .variables, .output, .problems, .viz-main { min-height: 160px; }
     .editor { min-height: 50vh; }
     .pane-header .hint { display: none; }
@@ -453,4 +522,5 @@ select {
 
 @media (prefers-reduced-motion: reduce) {
     .array-svg .cell.flash rect { animation: none; }
+    .stat, .bound-fill { transition: none; }
 }

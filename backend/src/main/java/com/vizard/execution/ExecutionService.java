@@ -8,6 +8,8 @@ import com.vizard.config.ExecutionProperties;
 import com.vizard.execution.analysis.SourceAnalysis;
 import com.vizard.execution.analysis.SourceAnalyzer;
 import com.vizard.execution.compile.CompilationResult;
+import com.vizard.execution.algorithms.AlgorithmDetector;
+import com.vizard.execution.algorithms.Detection;
 import com.vizard.execution.compile.JavaCompilerService;
 import com.vizard.execution.insight.CodeModel;
 import com.vizard.execution.insight.CodeModelBuilder;
@@ -156,8 +158,19 @@ public class ExecutionService {
         }
 
         CodeModel codeModel = forTracing ? buildCodeModel(analysis) : null;
+        List<Detection> algorithms = forTracing ? detectAlgorithms(analysis) : List.of();
         return new Preparation(new PreparedProgram(classesDir, runDir, fileName, analysis.mainClassName(),
-                analysis.topLevelClasses(), launcherClass, compiled.durationMs(), codeModel), null);
+                analysis.topLevelClasses(), launcherClass, compiled.durationMs(), codeModel, algorithms), null);
+    }
+
+    /** Like insights, recognition is a bonus and must never stop a trace. */
+    private static List<Detection> detectAlgorithms(SourceAnalysis analysis) {
+        try {
+            return AlgorithmDetector.detect(analysis.compilationUnit());
+        } catch (RuntimeException e) {
+            log.warn("Could not run algorithm recognition", e);
+            return List.of();
+        }
     }
 
     /** Insights are a bonus: if the analysis trips over unusual code, trace without them. */

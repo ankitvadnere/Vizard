@@ -3,9 +3,11 @@ package com.vizard.execution.insight;
 import com.vizard.api.dto.trace.ArrayAccessInsight;
 import com.vizard.api.dto.trace.ArrayChangeInsight;
 import com.vizard.api.dto.trace.ConditionInsight;
+import com.vizard.api.dto.trace.ExecutionStats;
 import com.vizard.api.dto.trace.HeapObjectSnapshot;
 import com.vizard.api.dto.trace.LoopInsight;
 import com.vizard.api.dto.trace.PointerInsight;
+import com.vizard.api.dto.trace.RangeInsight;
 import com.vizard.api.dto.trace.StepInsight;
 import com.vizard.api.dto.trace.SwapInsight;
 import com.vizard.api.dto.trace.TraceStep;
@@ -15,6 +17,7 @@ import com.vizard.execution.insight.CodeModel.ConditionSite;
 import com.vizard.execution.insight.CodeModel.LoopSite;
 import com.vizard.execution.insight.CodeModel.MethodSite;
 import com.vizard.execution.insight.CodeModel.PointerSpec;
+import com.vizard.execution.insight.CodeModel.RangeSpec;
 import com.vizard.execution.insight.ExpressionEvaluator.HeapRef;
 
 import java.util.ArrayDeque;
@@ -26,7 +29,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Adds a {@link StepInsight} to every step by combining the recorded states with the {@link CodeModel}.
+ * Adds a {@link StepInsight} and running {@link ExecutionStats} to every step by combining the
+ * recorded states with the {@link CodeModel}.
  *
  * <p>Design rules:
  * <ul>
@@ -47,14 +51,16 @@ public final class TraceAnnotator {
         int[] next = nextStepInSameCall(steps);
         Deque<FrameLoops> frames = new ArrayDeque<>();
         List<TraceStep> out = new ArrayList<>(steps.size());
+        StatsCounter stats = new StatsCounter();
 
         for (int k = 0; k < steps.size(); k++) {
             TraceStep step = steps.get(k);
             if (step.stack().isEmpty()) {
-                out.add(step);
+                out.add(step.withAnnotations(null, stats.snapshot(k, step)));
                 continue;
             }
-            List<LoopInsight> loops = trackLoops(frames, step, model);
+            int[] iterationsStarted = {0};
+            List<LoopInsight> loops = trackLoops(frames, step, model, iterationsStarted);
 
             EvalContext here = new EvalContext(step);
             ConditionSite condition = first(model.conditions().get(step.line()));
@@ -81,16 +87,146 @@ public final class TraceAnnotator {
                 }
             }
 
+            List<ArrayAccessInsight> accesses = accesses(model.accesses().get(step.line()), conditionState);
             StepInsight insight = new StepInsight(
                     conditionInsight,
-                    accesses(model.accesses().get(step.line()), conditionState),
+                    accesses,
                     changes(k > 0 ? steps.get(k - 1) : null, step),
                     swap(steps, k),
                     pointers(model, step, here),
-                    loops);
-            out.add(step.withInsight(insight));
+                    loops,
+                    ranges(model, step, here),
+                    loopBackTo(model, step));
+
+            // One-line loops have no iteration counter; each true check of their condition starts one.
+            if (conditionInsight != null && Boolean.TRUE.equals(conditionInsight.result())
+                    && isOneLineLoop(model, condition)) {
+                iterationsStarted[0]++;
+            }
+            stats.count(steps, k, insight, iterationsStarted[0]);
+            out.add(step.withAnnotations(insight, stats.snapshot(k, step)));
         }
         return out;
+    }
+
+    /**
+     * The JVM stops on the closing brace of a while/for body when it jumps back to the condition.
+     * That stop shows as "line 15: }" in the editor, so say where it is going.
+     */
+    private static Integer loopBackTo(CodeModel model, TraceStep step) {
+        if (!"LINE".equals(step.event())) {
+            return null;
+        }
+        for (LoopSite loop : model.loops()) {
+            boolean braceLine = loop.endLine() == step.line() && loop.endLine() > loop.bodyEnd();
+            if (braceLine && !loop.kind().equals("do")) {
+                return loop.conditionLine();
+            }
+        }
+        return null;
+    }
+
+    private static boolean isOneLineLoop(CodeModel model, ConditionSite condition) {
+        for (LoopSite loop : model.loops()) {
+            if (loop.conditionLine() == condition.line() && loop.onOneLine()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ---------- statistics --------------------------------------------------------------
+
+    /** Running totals; each step gets a snapshot, so stepping backwards rewinds them. */
+    private static final class StatsCounter {
+        int comparisons;
+        int swaps;
+        int reads;
+        int writes;
+        int calls;
+        int maxDepth;
+        int iterations;
+
+        void count(List<TraceStep> steps, int k, StepInsight insight, int iterationsStarted) {
+            TraceStep step = steps.get(k);
+            maxDepth = Math.max(maxDepth, step.depth());
+            iterations += iterationsStarted;
+
+            if (k > 0 && "CALL".equals(step.event())) {
+                String method = step.stack().get(0).methodName();
+                boolean entryPoint = method.equals("main") && step.depth() == 1;
+                if (!entryPoint && !method.equals("<clinit>")) {
+                    calls++;
+                }
+            }
+            if (insight.swap() != null) {
+                swaps++;
+            }
+            if (insight.condition() != null
+                    && insight.accesses().stream().anyMatch(ArrayAccessInsight::compared)) {
+                comparisons++;
+            }
+            if (linesFirstStep(steps, k)) {
+                for (ArrayAccessInsight access : insight.accesses()) {
+                    if (access.write()) {
+                        writes++;
+                    } else {
+                        reads++;
+                    }
+                }
+            }
+        }
+
+        /**
+         * A line can produce two steps in one call: "about to run" and later "returning from"
+         * (return n * f(n - 1)). Its array accesses happen once, so count them on the first.
+         */
+        private static boolean linesFirstStep(List<TraceStep> steps, int k) {
+            TraceStep step = steps.get(k);
+            if ("EXCEPTION".equals(step.event())) {
+                return false;
+            }
+            if (!"RETURN".equals(step.event())) {
+                return true;
+            }
+            for (int p = k - 1; p >= 0; p--) {
+                TraceStep before = steps.get(p);
+                if (before.depth() > step.depth()) {
+                    continue; // inside a call made from this line
+                }
+                return before.depth() < step.depth() || before.line() != step.line()
+                        || "RETURN".equals(before.event());
+            }
+            return true;
+        }
+
+        ExecutionStats snapshot(int k, TraceStep step) {
+            return new ExecutionStats(k + 1, comparisons, swaps, reads, writes, calls,
+                    Math.max(maxDepth, step.depth()), iterations);
+        }
+    }
+
+    // ---------- ranges ------------------------------------------------------------------
+
+    private static List<RangeInsight> ranges(CodeModel model, TraceStep step, EvalContext state) {
+        MethodSite method = methodAt(model, step);
+        if (method == null) {
+            return List.of();
+        }
+        List<RangeInsight> result = new ArrayList<>();
+        for (RangeSpec spec : method.ranges()) {
+            if (!(ExpressionEvaluator.evaluate(spec.array(), state) instanceof HeapRef ref)) {
+                continue;
+            }
+            HeapObjectSnapshot array = state.heapObject(ref.id());
+            Object from = ExpressionEvaluator.fromSnapshot(state.lookup(spec.from()));
+            Object to = ExpressionEvaluator.fromSnapshot(state.lookup(spec.to()));
+            if (array != null && "array".equals(array.kind()) && from instanceof Long f && to instanceof Long t) {
+                result.add(new RangeInsight(spec.array().text(), ref.id(), spec.from(), spec.to(),
+                        f.intValue(), t.intValue()));
+            }
+        }
+        return result;
     }
 
     // ---------- conditions --------------------------------------------------------------
@@ -190,14 +326,41 @@ public final class TraceAnnotator {
                 if (diff.size() == 2) {
                     int a = diff.get(0);
                     int b = diff.get(1);
-                    if (sameValue(before.elements().get(a), now.elements().get(b))
-                            && sameValue(before.elements().get(b), now.elements().get(a))) {
+                    boolean exchanged = sameValue(before.elements().get(a), now.elements().get(b))
+                            && sameValue(before.elements().get(b), now.elements().get(a));
+                    if (exchanged && writtenLikeASwap(steps, k, w, entry.getKey(), a, b)) {
                         return new SwapInsight(now.id(), a, b);
                     }
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * A swap writes its two cells from different lines ({@code a[i] = a[j]; a[j] = t;}), or both
+     * at once from one line. Copying a temp array back (merge sort) can also leave two cells
+     * exchanged, but writes them from the same line on different loop iterations: not a swap.
+     */
+    private static boolean writtenLikeASwap(List<TraceStep> steps, int k, int window, String key, int a, int b) {
+        int changedA = lastChange(steps, k, window, key, a);
+        int changedB = lastChange(steps, k, window, key, b);
+        if (changedA < 0 || changedB < 0) {
+            return false;
+        }
+        return changedA == changedB || steps.get(changedA - 1).line() != steps.get(changedB - 1).line();
+    }
+
+    /** The step (within the window) at which the cell got its current value; the line before it wrote it. */
+    private static int lastChange(List<TraceStep> steps, int k, int window, String key, int cell) {
+        for (int s = k; s > k - window && s > 0; s--) {
+            HeapObjectSnapshot now = steps.get(s).heap().get(key);
+            HeapObjectSnapshot before = steps.get(s - 1).heap().get(key);
+            if (changedCells(before, now).contains(cell)) {
+                return s;
+            }
+        }
+        return -1;
     }
 
     private static List<PointerInsight> pointers(CodeModel model, TraceStep step, EvalContext state) {
@@ -238,7 +401,8 @@ public final class TraceAnnotator {
         int previousLine = -1;
     }
 
-    private static List<LoopInsight> trackLoops(Deque<FrameLoops> frames, TraceStep step, CodeModel model) {
+    private static List<LoopInsight> trackLoops(Deque<FrameLoops> frames, TraceStep step, CodeModel model,
+                                                int[] iterationsStarted) {
         int depth = step.depth();
         while (frames.size() > depth) {
             frames.pop();
@@ -271,6 +435,7 @@ public final class TraceAnnotator {
                 count = 0; // left the loop (or not there yet)
             } else if (startsIteration(loop, previous, line)) {
                 count++;
+                iterationsStarted[0]++;
             }
             frame.iterations.put(loop.headerLine(), count);
             if (count > 0) {

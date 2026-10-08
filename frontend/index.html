@@ -94,21 +94,31 @@
                 <ol id="call-stack" class="call-stack"></ol>
             </aside>
         </div>
+        <div id="stats" class="stats-bar" aria-label="Execution statistics" hidden></div>
         <div id="viz-legend" class="legend" hidden>
             <span><i class="swatch compared"></i>Compared</span>
             <span><i class="swatch read"></i>Read</span>
             <span><i class="swatch target"></i>Written by this line</span>
             <span><i class="swatch changed"></i>Just changed</span>
             <span><i class="swatch pointer"></i>Index variable</span>
+            <span><i class="swatch outside"></i>Outside the active range</span>
         </div>
     </section>
 
-    <section class="pane variables-pane" aria-label="Variables">
-        <div class="pane-header">
-            <h2>Variables</h2>
-            <span id="frame-label" class="hint"></span>
+    <section class="pane variables-pane" aria-label="Variables and complexity">
+        <div class="tabs" role="tablist">
+            <button type="button" role="tab" class="tab" data-tab="variables" aria-selected="true">Variables</button>
+            <button type="button" role="tab" class="tab" data-tab="complexity" aria-selected="false">
+                Complexity <span id="complexity-dot" class="dot" hidden></span>
+            </button>
+            <span id="frame-label" class="hint tab-action"></span>
         </div>
-        <div id="variables" class="variables"></div>
+        <div class="tab-panel" data-panel="variables" role="tabpanel">
+            <div id="variables" class="variables"></div>
+        </div>
+        <div class="tab-panel" data-panel="complexity" role="tabpanel" hidden>
+            <div id="complexity" class="complexity"></div>
+        </div>
     </section>
 
     <section class="pane console-pane" aria-label="Program output">

@@ -12,6 +12,7 @@ const STEP = CELL + GAP;
 const TOP = 16;           // room for index numbers
 const POINTER_LINE = 14;  // height of one pointer name
 const MAX_TEXT = 6;       // characters shown inside a cell
+const RANGE_SPACE = 16;   // extra height for the active-range bracket
 
 export class ArrayVisualizer {
     constructor(container) {
@@ -37,13 +38,16 @@ export class ArrayVisualizer {
         const n = object.elements.length;
         const marks = cellMarks(ref, insight);
         const pointers = groupPointers(ref, insight);
+        const range = (insight.ranges ?? []).find((r) => r.ref === ref);
+        const top = range ? TOP + RANGE_SPACE : TOP; // room for the range bracket above the indexes
+        const indexY = top - 5;
 
         const leftGhost = pointers.has(-1);
         const rightGhost = pointers.has(object.length) && !object.truncated;
         const originX = leftGhost ? STEP : 0;
         const maxNames = Math.max(0, ...[...pointers.values()].map((v) => v.length));
         const width = originX + n * STEP + (rightGhost ? STEP : 0) + (object.truncated ? 70 : 0);
-        const height = TOP + CELL + (maxNames ? 12 + maxNames * POINTER_LINE : 4);
+        const height = top + CELL + (maxNames ? 12 + maxNames * POINTER_LINE : 4);
 
         const svg = el("svg", { class: "array-svg", width, height, viewBox: `0 0 ${width} ${height}`, role: "img" });
         svg.setAttribute("aria-label", `${names.join(", ")}: ${object.elements.map((e) => formatValue(e, step.heap, 1)).join(", ")}`);
@@ -51,28 +55,30 @@ export class ArrayVisualizer {
         const cells = [];
         object.elements.forEach((element, i) => {
             const x = originX + i * STEP;
-            svg.append(text("index", x + CELL / 2, 11, String(i)));
-            const g = el("g", { class: `cell ${marks.get(i) ?? ""}` });
-            g.append(el("rect", { x, y: TOP, width: CELL, height: CELL, rx: 5 }));
+            svg.append(text("index", x + CELL / 2, indexY, String(i)));
+            const outside = range && (i < range.from || i > range.to);
+            const g = el("g", { class: `cell ${marks.get(i) ?? ""}${outside ? " outside" : ""}` });
+            g.append(el("rect", { x, y: top, width: CELL, height: CELL, rx: 5 }));
             const full = formatValue(element, step.heap, 1);
             const shown = full.length > MAX_TEXT ? `${full.slice(0, MAX_TEXT - 1)}…` : full;
             if (full.length > 3) g.classList.add("small");
-            const label = text(null, x + CELL / 2, TOP + CELL / 2, shown);
+            const label = text(null, x + CELL / 2, top + CELL / 2, shown);
             if (shown !== full) label.append(el("title", {}, full));
             g.append(label);
             svg.append(g);
             cells[i] = g;
         });
 
-        if (leftGhost) svg.append(el("rect", { class: "ghost", x: 0, y: TOP, width: CELL, height: CELL, rx: 5 }));
-        if (rightGhost) svg.append(el("rect", { class: "ghost", x: originX + n * STEP, y: TOP, width: CELL, height: CELL, rx: 5 }));
+        if (range) drawRange(svg, range, originX, n);
+        if (leftGhost) svg.append(el("rect", { class: "ghost", x: 0, y: top, width: CELL, height: CELL, rx: 5 }));
+        if (rightGhost) svg.append(el("rect", { class: "ghost", x: originX + n * STEP, y: top, width: CELL, height: CELL, rx: 5 }));
         if (object.truncated) {
-            svg.append(text("more", originX + n * STEP + 4, TOP + CELL / 2, `+${object.length - n} more`, "start"));
+            svg.append(text("more", originX + n * STEP + 4, top + CELL / 2, `+${object.length - n} more`, "start"));
         }
 
         for (const [index, variables] of pointers) {
             const cx = originX + index * STEP + CELL / 2;
-            const y = TOP + CELL + 4;
+            const y = top + CELL + 4;
             svg.append(el("path", { class: "pointer-caret", d: `M${cx} ${y} l5 7 h-10 z` }));
             variables.forEach((name, k) => {
                 svg.append(text("pointer-name", cx, y + 18 + k * POINTER_LINE, name));
@@ -183,6 +189,22 @@ function groupPointers(ref, insight) {
         byIndex.set(p.index, list);
     }
     return byIndex;
+}
+
+/**
+ * Bracket over the active range (low..high in binary search, left..right in one recursive call).
+ * Cells outside it are dimmed by the "outside" class; an empty range draws no bracket.
+ */
+function drawRange(svg, range, originX, n) {
+    const from = Math.max(range.from, 0);
+    const to = Math.min(range.to, n - 1);
+    if (from > to) return;
+    const x1 = originX + from * STEP + 2;
+    const x2 = originX + to * STEP + CELL - 2;
+    const y = 12;   // bracket from y=12 down to 17; label baseline above it; indexes start below 18
+    svg.append(el("path", { class: "range-bracket", d: `M${x1} ${y + 5} V${y} H${x2} V${y + 5}` }));
+    const label = text("range-label", (x1 + x2) / 2, y - 2, `${range.fromVariable}..${range.toVariable}`);
+    svg.append(label);
 }
 
 // ---------- animation ----------

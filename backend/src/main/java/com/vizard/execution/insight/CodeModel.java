@@ -81,7 +81,12 @@ public record CodeModel(
     public record PointerSpec(Expr array, List<String> variables) {
     }
 
-    public record MethodSite(String name, int startLine, int endLine, List<PointerSpec> pointers) {
+    /** {@code from..to} bounds the part of {@code array} a method works on (low..high, left..right). */
+    public record RangeSpec(Expr array, String from, String to) {
+    }
+
+    public record MethodSite(String name, int startLine, int endLine, List<PointerSpec> pointers,
+                             List<RangeSpec> ranges) {
 
         boolean contains(int line) {
             return line >= startLine && line <= endLine;

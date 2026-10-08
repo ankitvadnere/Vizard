@@ -12,6 +12,8 @@ import java.util.List;
  * @param swap      two cells that just exchanged values, if this step completed a swap
  * @param pointers  int variables currently used as indexes into arrays (i, j, low, mid...)
  * @param loops     loops the current line is inside, outermost first, with their iteration count
+ * @param ranges    the part of an array the current method works on (low..high), if recognisable
+ * @param loopBackTo when stopped on a loop's closing brace: the header line it jumps back to, else null
  */
 public record StepInsight(
         ConditionInsight condition,
@@ -19,6 +21,8 @@ public record StepInsight(
         List<ArrayChangeInsight> changes,
         SwapInsight swap,
         List<PointerInsight> pointers,
-        List<LoopInsight> loops
+        List<LoopInsight> loops,
+        List<RangeInsight> ranges,
+        Integer loopBackTo
 ) {
 }
