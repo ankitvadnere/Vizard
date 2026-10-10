@@ -82,6 +82,7 @@ async function stepThrough() {
 
         lastRenderedIndex = -1;
         complexity.load(response.analysis, response.truncated);
+        visualization.load(response.steps.at(-1));
         playback.load(response.steps);
         playbackBar.show();
         renderStep();

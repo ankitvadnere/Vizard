@@ -37,6 +37,7 @@ final class HeapReader {
 
     static final int MAX_HEAP_OBJECTS = 150;
     static final int MAX_ARRAY_ELEMENTS = 100;
+    private static final Set<String> PREV_LINKS = Set.of("prev", "previous");
     static final int MAX_STRING_LENGTH = 300;
 
     private static final Set<String> BOXED_TYPES = Set.of(
@@ -47,6 +48,7 @@ final class HeapReader {
     private final Deque<ObjectReference> pending = new ArrayDeque<>();
     private final Set<Long> seen = new HashSet<>();
     private final Map<String, HeapObjectSnapshot> heap = new LinkedHashMap<>();
+    private final CollectionReader collections = new CollectionReader(this::value, MAX_ARRAY_ELEMENTS);
 
     HeapReader(Predicate<String> isUserClass) {
         this.isUserClass = isUserClass;
@@ -102,21 +104,69 @@ final class HeapReader {
                     elements.add(value(element));
                 }
             }
-            return new HeapObjectSnapshot(o.uniqueID(), "array", type, length, elements, List.of(), captured < length);
+            return HeapObjectSnapshot.array(o.uniqueID(), type, length, elements, captured < length);
+        }
+
+        ReferenceType refType = o.referenceType();
+        if (!isUserClass.test(refType.name())) {
+            HeapObjectSnapshot collection = collections.read(o);
+            if (collection != null) {
+                return collection;
+            }
+            return HeapObjectSnapshot.object(o.uniqueID(), type, List.of(), null, null); // e.g. Scanner
         }
 
         List<VariableSnapshot> fields = new ArrayList<>();
-        ReferenceType refType = o.referenceType();
-        if (isUserClass.test(refType.name()) && refType instanceof ClassType classType) {
+        List<String> selfLinks = new ArrayList<>();
+        if (refType instanceof ClassType classType) {
             List<Field> instanceFields = classType.allFields().stream()
                     .filter(f -> !f.isStatic() && !f.isSynthetic())
                     .toList();
             Map<Field, Value> values = o.getValues(instanceFields);
             for (Field f : instanceFields) {
                 fields.add(new VariableSnapshot(f.name(), displayType(f.typeName()), value(values.get(f)), false));
+                if (f.typeName().equals(refType.name())) {
+                    selfLinks.add(f.name());
+                }
             }
         }
-        return new HeapObjectSnapshot(o.uniqueID(), "object", type, 0, List.of(), fields, false);
+        NodeShape shape = nodeShape(selfLinks);
+        return HeapObjectSnapshot.object(o.uniqueID(), type, fields,
+                shape == null ? null : shape.role(), shape == null ? null : shape.links());
+    }
+
+    record NodeShape(String role, List<String> links) {
+    }
+
+    /**
+     * A user class whose fields point to its own class is a node: left + right → tree node;
+     * one link (or next + prev) → linked-list node. Decided from the class's structure alone.
+     */
+    static NodeShape nodeShape(List<String> selfLinks) {
+        if (selfLinks.isEmpty()) {
+            return null;
+        }
+        String left = find(selfLinks, "left");
+        String right = find(selfLinks, "right");
+        if (left != null && right != null) {
+            return new NodeShape("tree-node", List.of(left, right));
+        }
+        List<String> forward = selfLinks.stream()
+                .filter(n -> !PREV_LINKS.contains(n.toLowerCase()) && !n.equalsIgnoreCase("parent")).toList();
+        List<String> backward = selfLinks.stream().filter(n -> PREV_LINKS.contains(n.toLowerCase())).toList();
+        if (forward.size() == 1 && backward.size() <= 1) {
+            List<String> links = new ArrayList<>(forward);
+            links.addAll(backward);
+            return new NodeShape("list-node", List.copyOf(links));
+        }
+        if (forward.size() == 2 && backward.isEmpty()) {
+            return new NodeShape("tree-node", List.copyOf(forward)); // two children, any names
+        }
+        return null;
+    }
+
+    private static String find(List<String> names, String wanted) {
+        return names.stream().filter(n -> n.equalsIgnoreCase(wanted)).findFirst().orElse(null);
     }
 
     private static ValueSnapshot primitive(PrimitiveValue p, String type) {

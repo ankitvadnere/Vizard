@@ -25,7 +25,8 @@ class ExamplesTest {
 
     @Test
     void catalogHasAllGroups() {
-        assertThat(catalog.all()).extracting(Example::group).contains("Basics", "Searching", "Sorting");
+        assertThat(catalog.all()).extracting(Example::group)
+                .contains("Basics", "Searching", "Sorting", "Data structures");
         assertThat(catalog.all()).allMatch(e -> e.code().contains("public static void main"));
     }
 
@@ -42,7 +43,7 @@ class ExamplesTest {
 
             List<String> found = r.analysis().algorithms().stream().map(AlgorithmMatch::id).toList();
             assertThat(found).as(example.id())
-                    .isEqualTo(example.algorithm() == null ? List.of() : List.of(example.algorithm()));
+                    .isEqualTo(example.algorithms());
         }
     }
 }

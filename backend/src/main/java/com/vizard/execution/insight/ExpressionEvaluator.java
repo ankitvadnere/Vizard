@@ -58,6 +58,40 @@ public final class ExpressionEvaluator {
         return valueOrText(expr, ctx);
     }
 
+    /**
+     * True if a comparison in the condition reads a value field of one of the user's objects,
+     * like {@code key < root.data}. Comparing links ({@code root.left == null}) or an array's
+     * length is not counted: those are not data comparisons.
+     */
+    public static boolean comparesValueField(Expr expr, EvalContext ctx) {
+        if (expr instanceof Expr.Binary b && COMPARISONS.contains(b.operator())) {
+            return readsValueField(b.left(), ctx) || readsValueField(b.right(), ctx);
+        }
+        return switch (expr) {
+            case Expr.Binary b -> comparesValueField(b.left(), ctx) || comparesValueField(b.right(), ctx);
+            case Expr.Unary u -> comparesValueField(u.operand(), ctx);
+            case Expr.Paren p -> comparesValueField(p.inner(), ctx);
+            default -> false;
+        };
+    }
+
+    private static boolean readsValueField(Expr expr, EvalContext ctx) {
+        return switch (expr) {
+            case Expr.FieldAccess f -> {
+                Object target = evaluate(f.target(), ctx);
+                boolean onObject = target instanceof HeapRef ref && ctx.heapObject(ref.id()) != null
+                        && "object".equals(ctx.heapObject(ref.id()).kind());
+                Object value = evaluate(f, ctx);
+                yield onObject && value != null && value != NULL && !(value instanceof HeapRef);
+            }
+            case Expr.Binary b -> readsValueField(b.left(), ctx) || readsValueField(b.right(), ctx);
+            case Expr.Unary u -> readsValueField(u.operand(), ctx);
+            case Expr.Paren p -> readsValueField(p.inner(), ctx);
+            case Expr.Cast c -> readsValueField(c.operand(), ctx);
+            default -> false;
+        };
+    }
+
     /** Java-style text for a value: 5, 2.5, 'a', "hi", null, int[]. */
     public static String display(Object value, EvalContext ctx) {
         if (value == NULL) return "null";
@@ -65,7 +99,18 @@ public final class ExpressionEvaluator {
         if (value instanceof String s) return "\"" + s + "\"";
         if (value instanceof HeapRef ref) {
             HeapObjectSnapshot object = ctx.heapObject(ref.id());
-            return object == null ? "object" : object.type();
+            if (object == null) {
+                return "object";
+            }
+            if (object.links() != null) {
+                // a linked-list or tree node reads as Node(4): its type and its own value
+                for (VariableSnapshot f : object.fields()) {
+                    if (!object.links().contains(f.name()) && f.value().ref() == null) {
+                        return object.type() + "(" + f.value().display() + ")";
+                    }
+                }
+            }
+            return object.type();
         }
         return String.valueOf(value);
     }

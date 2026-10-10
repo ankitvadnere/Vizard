@@ -1,4 +1,8 @@
-// The "what is this line doing" strip: the condition being tested and the loops we're inside.
+// The "what is this line doing" strip: what the previous line did to a collection, the condition
+// being tested, and the loops we're inside.
+
+import { formatValue } from "../values.js";
+import { nameOf } from "./visible.js";
 
 const KIND_LABEL = { if: "if", while: "while", for: "for", do: "do-while" };
 
@@ -14,10 +18,43 @@ export class InsightStrip {
     render(step) {
         this.clear();
         const insight = step.insight;
+        if (step.operations?.length) this.container.append(operationList(step));
         if (!insight) return;
         if (insight.condition) this.container.append(conditionCard(insight.condition));
         if (insight.loops?.length) this.container.append(loopChips(insight.loops, step));
     }
+}
+
+const KIND_WORD = {
+    push: "push", pop: "pop", enqueue: "enqueue", dequeue: "dequeue",
+    insert: "insert", remove: "remove", lookup: "look up", other: "",
+};
+
+/** "Line 9 called stack.push('(')" for each collection call made since the previous step. */
+function operationList(step) {
+    const list = document.createElement("div");
+    list.className = "op-list";
+    const byLine = new Map();
+    for (const op of step.operations) {
+        if (!byLine.has(op.line)) byLine.set(op.line, []);
+        byLine.get(op.line).push(op);
+    }
+    for (const [line, ops] of byLine) {
+        const row = document.createElement("div");
+        row.className = "op-row";
+        row.append(span("label", `line ${line} did`));
+        for (const op of ops.slice(0, 6)) {
+            const name = nameOf(step, op.ref) ?? op.type;
+            const args = op.args.map((a) => formatValue(a, step.heap, 1)).join(", ");
+            const chip = code(`${name}.${op.method}(${args})`, "op-call");
+            chip.dataset.kind = op.kind ?? "other";
+            if (KIND_WORD[op.kind]) chip.title = KIND_WORD[op.kind];
+            row.append(chip);
+        }
+        if (ops.length > 6) row.append(span("gives", `+${ops.length - 6} more`));
+        list.append(row);
+    }
+    return list;
 }
 
 function conditionCard(condition) {

@@ -51,12 +51,14 @@ public final class AlgorithmDetector {
             methodsByName.putIfAbsent(m.getNameAsString(), m);
         }
 
+        Map<String, StructureAlgorithms.NodeClass> nodeClasses = StructureAlgorithms.nodeClasses(cu);
         List<Detection> found = new ArrayList<>();
         for (MethodDeclaration m : cu.findAll(MethodDeclaration.class)) {
             if (m.getBody().isEmpty()) {
                 continue;
             }
-            Optional<Detection> d = mergeSort(m, methodsByName)
+            Optional<Detection> d = StructureAlgorithms.detect(m, nodeClasses)
+                    .or(() -> mergeSort(m, methodsByName))
                     .or(() -> quickSort(m, methodsByName))
                     .or(() -> binarySearch(m))
                     .or(() -> bubbleSort(m))

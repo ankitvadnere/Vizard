@@ -24,6 +24,7 @@ import java.util.Map;
  * @param outputLength  how many characters of stdout had been printed at this step
  * @param insight       meaning of the step (conditions, array accesses, swaps, loops); may be null
  * @param stats         operation counts up to and including this step; may be null
+ * @param operations    collection calls made since the previous step (push, poll, put...); never null
  */
 public record TraceStep(
         int index,
@@ -38,16 +39,22 @@ public record TraceStep(
         String exceptionType,
         String exceptionMessage,
         StepInsight insight,
-        ExecutionStats stats
+        ExecutionStats stats,
+        List<StructureOperation> operations
 ) {
 
     public TraceStep withOutputLength(int length) {
         return new TraceStep(index, event, line, depth, stack, statics, heap, length,
-                returnValue, exceptionType, exceptionMessage, insight, stats);
+                returnValue, exceptionType, exceptionMessage, insight, stats, operations);
+    }
+
+    public TraceStep withStructures(Map<String, HeapObjectSnapshot> newHeap, List<StructureOperation> newOperations) {
+        return new TraceStep(index, event, line, depth, stack, statics, newHeap, outputLength,
+                returnValue, exceptionType, exceptionMessage, insight, stats, newOperations);
     }
 
     public TraceStep withAnnotations(StepInsight newInsight, ExecutionStats newStats) {
         return new TraceStep(index, event, line, depth, stack, statics, heap, outputLength,
-                returnValue, exceptionType, exceptionMessage, newInsight, newStats);
+                returnValue, exceptionType, exceptionMessage, newInsight, newStats, operations);
     }
 }

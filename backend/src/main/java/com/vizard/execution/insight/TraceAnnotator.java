@@ -9,6 +9,7 @@ import com.vizard.api.dto.trace.LoopInsight;
 import com.vizard.api.dto.trace.PointerInsight;
 import com.vizard.api.dto.trace.RangeInsight;
 import com.vizard.api.dto.trace.StepInsight;
+import com.vizard.api.dto.trace.StructureOperation;
 import com.vizard.api.dto.trace.SwapInsight;
 import com.vizard.api.dto.trace.TraceStep;
 import com.vizard.api.dto.trace.ValueSnapshot;
@@ -103,7 +104,9 @@ public final class TraceAnnotator {
                     && isOneLineLoop(model, condition)) {
                 iterationsStarted[0]++;
             }
-            stats.count(steps, k, insight, iterationsStarted[0]);
+            boolean comparesValues = conditionInsight != null
+                    && ExpressionEvaluator.comparesValueField(condition.expression(), conditionState);
+            stats.count(steps, k, insight, iterationsStarted[0], comparesValues);
             out.add(step.withAnnotations(insight, stats.snapshot(k, step)));
         }
         return out;
@@ -146,8 +149,9 @@ public final class TraceAnnotator {
         int calls;
         int maxDepth;
         int iterations;
+        final Map<String, Integer> structureOps = new HashMap<>();
 
-        void count(List<TraceStep> steps, int k, StepInsight insight, int iterationsStarted) {
+        void count(List<TraceStep> steps, int k, StepInsight insight, int iterationsStarted, boolean comparesValues) {
             TraceStep step = steps.get(k);
             maxDepth = Math.max(maxDepth, step.depth());
             iterations += iterationsStarted;
@@ -162,8 +166,11 @@ public final class TraceAnnotator {
             if (insight.swap() != null) {
                 swaps++;
             }
+            for (StructureOperation op : step.operations()) {
+                structureOps.merge(op.kind() == null ? "other" : op.kind(), 1, Integer::sum);
+            }
             if (insight.condition() != null
-                    && insight.accesses().stream().anyMatch(ArrayAccessInsight::compared)) {
+                    && (comparesValues || insight.accesses().stream().anyMatch(ArrayAccessInsight::compared))) {
                 comparisons++;
             }
             if (linesFirstStep(steps, k)) {
@@ -202,7 +209,12 @@ public final class TraceAnnotator {
 
         ExecutionStats snapshot(int k, TraceStep step) {
             return new ExecutionStats(k + 1, comparisons, swaps, reads, writes, calls,
-                    Math.max(maxDepth, step.depth()), iterations);
+                    Math.max(maxDepth, step.depth()), iterations, op("push"), op("pop"), op("enqueue"),
+                    op("dequeue"), op("insert"), op("remove"), op("lookup"));
+        }
+
+        private int op(String kind) {
+            return structureOps.getOrDefault(kind, 0);
         }
     }
 

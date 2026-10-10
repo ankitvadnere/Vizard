@@ -10,7 +10,9 @@ import com.vizard.execution.analysis.SourceAnalyzer;
 import com.vizard.execution.compile.CompilationResult;
 import com.vizard.execution.algorithms.AlgorithmDetector;
 import com.vizard.execution.algorithms.Detection;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.vizard.execution.compile.JavaCompilerService;
+import com.vizard.execution.trace.CollectionCalls;
 import com.vizard.execution.insight.CodeModel;
 import com.vizard.execution.insight.CodeModelBuilder;
 import com.vizard.execution.sandbox.ExecutionSandbox;
@@ -28,7 +30,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -159,8 +163,22 @@ public class ExecutionService {
 
         CodeModel codeModel = forTracing ? buildCodeModel(analysis) : null;
         List<Detection> algorithms = forTracing ? detectAlgorithms(analysis) : List.of();
+        Set<Integer> callLines = forTracing ? collectionCallLines(analysis) : Set.of();
         return new Preparation(new PreparedProgram(classesDir, runDir, fileName, analysis.mainClassName(),
-                analysis.topLevelClasses(), launcherClass, compiled.durationMs(), codeModel, algorithms), null);
+                analysis.topLevelClasses(), launcherClass, compiled.durationMs(), codeModel, algorithms,
+                callLines), null);
+    }
+
+    /** Lines with a call like st.push(x) or map.get(k): where the debugger watches collection operations. */
+    private static Set<Integer> collectionCallLines(SourceAnalysis analysis) {
+        Set<Integer> lines = new HashSet<>();
+        for (MethodCallExpr call : analysis.compilationUnit().findAll(MethodCallExpr.class)) {
+            if (call.getScope().isPresent() && CollectionCalls.COUNTED_METHODS.contains(call.getNameAsString())) {
+                call.getBegin().ifPresent(p -> lines.add(p.line));
+                call.getName().getBegin().ifPresent(p -> lines.add(p.line)); // a chained call on its own line
+            }
+        }
+        return Set.copyOf(lines);
     }
 
     /** Like insights, recognition is a bonus and must never stop a trace. */

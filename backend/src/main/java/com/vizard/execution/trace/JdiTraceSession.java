@@ -26,6 +26,7 @@ import com.sun.jdi.event.ClassPrepareEvent;
 import com.sun.jdi.event.Event;
 import com.sun.jdi.event.EventSet;
 import com.sun.jdi.event.ExceptionEvent;
+import com.sun.jdi.event.MethodEntryEvent;
 import com.sun.jdi.event.MethodExitEvent;
 import com.sun.jdi.event.VMDeathEvent;
 import com.sun.jdi.event.VMDisconnectEvent;
@@ -34,9 +35,11 @@ import com.sun.jdi.request.ClassPrepareRequest;
 import com.sun.jdi.request.EventRequest;
 import com.sun.jdi.request.EventRequestManager;
 import com.sun.jdi.request.ExceptionRequest;
+import com.sun.jdi.request.MethodEntryRequest;
 import com.sun.jdi.request.MethodExitRequest;
 import com.vizard.api.dto.trace.FrameSnapshot;
 import com.vizard.api.dto.trace.HeapObjectSnapshot;
+import com.vizard.api.dto.trace.StructureOperation;
 import com.vizard.api.dto.trace.TraceStep;
 import com.vizard.api.dto.trace.ValueSnapshot;
 import com.vizard.api.dto.trace.VariableSnapshot;
@@ -46,6 +49,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Records a program's execution with the Java Debug Interface (JDI), the same API
@@ -64,6 +68,7 @@ import java.util.Map;
 public final class JdiTraceSession implements AutoCloseable {
 
     private static final int MAX_FRAMES_CAPTURED = 40;
+    private static final String CALL_SITE = "vizard.callSite";
     private static final int MAX_FRAMES_SCANNED = 200;
     private static final int CONNECT_TIMEOUT_MS = 10_000;
 
@@ -79,6 +84,14 @@ public final class JdiTraceSession implements AutoCloseable {
     private ReferenceType launcherType;
     private Field outputCounter;
     private EventRequestManager requests;
+
+    /** Collection calls since the last recorded step (they belong to the next one). */
+    private final List<StructureOperation> pendingOperations = new ArrayList<>();
+    /** Lines of the user's file that call a counted collection method (from the AST). */
+    private Set<Integer> collectionCallLines = Set.of();
+    /** One-shot watch: armed at a call instruction, catches the method entered next, then disarms. */
+    private MethodEntryRequest nextCall;
+    private boolean threadFilterSet;
 
     private JdiTraceSession(ListeningConnector connector, Map<String, Connector.Argument> args, String port) {
         this.connector = connector;
@@ -115,10 +128,11 @@ public final class JdiTraceSession implements AutoCloseable {
      * Always leaves the program running freely (or finished) when it returns.
      */
     public TraceRecording record(RunningProgram program, List<String> userClassNames,
-                                 String launcherClassName, int maxSteps)
+                                 String launcherClassName, int maxSteps, Set<Integer> collectionCallLines)
             throws IOException, IllegalConnectorArgumentsException {
         this.userClassNames = userClassNames;
         this.launcherClassName = launcherClassName;
+        this.collectionCallLines = collectionCallLines;
 
         VirtualMachine vm = connector.accept(connectorArgs);
         requests = vm.eventRequestManager();
@@ -130,6 +144,8 @@ public final class JdiTraceSession implements AutoCloseable {
                 watchClassLoading(name);
                 watchClassLoading(name + "$*"); // nested classes such as Main$Node
             }
+            nextCall = requests.createMethodEntryRequest();
+            nextCall.setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD);
             ExceptionRequest uncaught = requests.createExceptionRequest(null, false, true);
             uncaught.setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD);
             uncaught.enable();
@@ -146,8 +162,12 @@ public final class JdiTraceSession implements AutoCloseable {
                         done = true;
                     } else if (event instanceof ClassPrepareEvent e) {
                         onClassLoaded(e.referenceType());
+                    } else if (event instanceof BreakpointEvent e && e.request().getProperty(CALL_SITE) != null) {
+                        armNextCall(e.thread());
                     } else if (event instanceof BreakpointEvent e) {
                         record(e.thread(), "LINE", e.location().lineNumber(), null, null);
+                    } else if (event instanceof MethodEntryEvent e) {
+                        onCollectionCall(e);
                     } else if (event instanceof MethodExitEvent e) {
                         if (isInterestingReturn(e.method())) {
                             record(e.thread(), "RETURN", e.location().lineNumber(), e.returnValue(), null);
@@ -175,6 +195,9 @@ public final class JdiTraceSession implements AutoCloseable {
             } catch (VMDisconnectedException ignored) {
                 // already gone
             }
+        }
+        if (!pendingOperations.isEmpty() && !steps.isEmpty()) {
+            attachOperations(steps.size() - 1); // calls after the last recorded step
         }
         return new TraceRecording(List.copyOf(steps), truncated);
     }
@@ -209,9 +232,16 @@ public final class JdiTraceSession implements AutoCloseable {
                 bp.enable();
             }
             // Loops written on one line jump back into the middle of their line; stop there too.
+            // And on lines that call a collection, stop at each call instruction (CollectionCalls).
             for (Method method : type.methods()) {
                 if (method.isAbstract() || method.isNative() || method.isBridge()) {
                     continue;
+                }
+                for (long site : CollectionCalls.callSites(method, collectionCallLines)) {
+                    BreakpointRequest bp = requests.createBreakpointRequest(method.locationOfCodeIndex(site));
+                    bp.putProperty(CALL_SITE, Boolean.TRUE);
+                    bp.setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD);
+                    bp.enable();
                 }
                 for (long target : SameLineLoops.jumpTargets(method)) {
                     BreakpointRequest bp = requests.createBreakpointRequest(method.locationOfCodeIndex(target));
@@ -238,6 +268,67 @@ public final class JdiTraceSession implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    /** At a call instruction on a line that uses a collection: catch the next method entered on this thread. */
+    private void armNextCall(ThreadReference thread) {
+        if (!threadFilterSet) {
+            nextCall.addThreadFilter(thread); // allowed only while the request is disabled
+            threadFilterSet = true;
+        }
+        if (!nextCall.isEnabled()) {
+            nextCall.enable();
+        }
+    }
+
+    /**
+     * A collection method was entered. Count it only when the user's code called it directly:
+     * HashSet.add calling HashMap.put internally is one operation, not two.
+     */
+    private void onCollectionCall(MethodEntryEvent e) {
+        Method method = e.method();
+        if (method.isStaticInitializer()) {
+            return; // the called class is being initialised first; the call itself comes next
+        }
+        nextCall.disable();
+        if (!CollectionCalls.COUNTED_METHODS.contains(method.name())) {
+            return; // e.g. Integer.valueOf or println on the same line
+        }
+        try {
+            ThreadReference thread = e.thread();
+            if (thread.frameCount() < 2) {
+                return;
+            }
+            StackFrame caller = thread.frame(1);
+            if (!isUserClass(caller.location().declaringType().name())) {
+                return;
+            }
+            int line = caller.location().lineNumber();
+            StackFrame callee = thread.frame(0);
+            ObjectReference receiver = callee.thisObject();
+            if (receiver == null || !CollectionCalls.COLLECTION_CLASSES.contains(receiver.referenceType().name())) {
+                return; // a user method that happens to be called add() or get()
+            }
+            HeapReader values = new HeapReader(this::isUserClass);
+            List<ValueSnapshot> args = new ArrayList<>();
+            for (Value arg : callee.getArgumentValues()) {
+                args.add(values.value(arg));
+            }
+            pendingOperations.add(new StructureOperation(receiver.uniqueID(),
+                    HeapReader.displayType(receiver.referenceType().name()), method.name(), List.copyOf(args),
+                    line, null));
+        } catch (IncompatibleThreadStateException | com.sun.jdi.InternalException ignored) {
+            // frames unavailable for this event; the operation simply isn't counted
+        }
+    }
+
+    /** Hands the waiting operations to a step (combined with any it already has). */
+    private void attachOperations(int index) {
+        TraceStep s = steps.get(index);
+        List<StructureOperation> all = new ArrayList<>(s.operations());
+        all.addAll(pendingOperations);
+        pendingOperations.clear();
+        steps.set(index, s.withStructures(s.heap(), List.copyOf(all)));
     }
 
     /** Constructor and static-initializer returns add noise without teaching anything. */
@@ -297,8 +388,11 @@ public final class JdiTraceSession implements AutoCloseable {
                     && previous.stack().equals(stack) && previous.statics().equals(statics)
                     && previous.heap().equals(heap) && previous.outputLength() == outputBytes;
             int index = mergeIntoPrevious ? previous.index() : steps.size();
+            List<StructureOperation> operations = new ArrayList<>(mergeIntoPrevious ? previous.operations() : List.of());
+            operations.addAll(pendingOperations);
+            pendingOperations.clear();
             TraceStep step = new TraceStep(index, event, line, depth, stack, statics, heap, outputBytes,
-                    returned, exceptionType, exceptionMessage, null, null);
+                    returned, exceptionType, exceptionMessage, null, null, List.copyOf(operations));
             if (mergeIntoPrevious) {
                 steps.set(steps.size() - 1, step);
             } else {

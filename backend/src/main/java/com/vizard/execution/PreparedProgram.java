@@ -5,6 +5,7 @@ import com.vizard.execution.insight.CodeModel;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A program that parsed, passed the safety policy and compiled; ready to run or trace.
@@ -15,6 +16,8 @@ import java.util.List;
  * @param launcherClassName Vizard's generated entry point (tracing only, else null)
  * @param codeModel        line-level facts from the AST used to explain steps (tracing only, else null)
  * @param algorithms       algorithms recognised in the source (tracing only, else empty)
+ * @param collectionCallLines lines that call push/poll/put/... (tracing only), where the debugger
+ *                         watches collection operations
  */
 public record PreparedProgram(
         Path classesDir,
@@ -25,6 +28,7 @@ public record PreparedProgram(
         String launcherClassName,
         long compileTimeMs,
         CodeModel codeModel,
-        List<Detection> algorithms
+        List<Detection> algorithms,
+        Set<Integer> collectionCallLines
 ) {
 }

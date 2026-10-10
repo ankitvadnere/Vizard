@@ -351,10 +351,63 @@ select {
 .swatch.outside { opacity: 0.35; background: var(--raised); }
 .swatch.pointer { border: 0; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--amber); border-radius: 0; }
 
+/* ---------- Data structures (stack, queue, heap, map, linked list, tree) ---------- */
+.structure-svg .end-label { fill: var(--muted); font: 11px var(--font-ui); dominant-baseline: central; }
+.structure-svg .end-caret { fill: var(--amber); }
+.structure-svg .side-note { fill: var(--amber); font: 11px var(--font-ui); dominant-baseline: central; }
+.structure-svg .stack-base { stroke: var(--muted); stroke-width: 2; fill: none; }
+.structure-svg .ghost-cell { fill: none; stroke: var(--line); stroke-dasharray: 4 3; }
+.structure-svg .ghost-text { fill: var(--muted); font: 13px var(--font-code); text-anchor: middle; dominant-baseline: central; }
+.structure-svg .empty-note { fill: var(--muted); font: 12px var(--font-ui); dominant-baseline: central; }
+
+.structure-svg .list-node rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.structure-svg .list-node .link-cell { fill: var(--raised); }
+.structure-svg .list-node text { fill: var(--text); font: 14px var(--font-code); text-anchor: middle; dominant-baseline: central; }
+.structure-svg .list-node.changed rect:first-child { fill: rgba(240, 180, 41, 0.32); }
+.structure-svg .list-node.flash rect:first-child { animation: cell-flash 600ms ease-out; }
+.structure-svg .link-dot { fill: var(--text); }
+.structure-svg .link { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.structure-svg .link.hot { stroke: var(--amber); stroke-width: 2; }
+.structure-svg .link.back { stroke-dasharray: 3 3; }
+.structure-svg .arrowhead { fill: var(--muted); }
+.structure-svg .arrowhead.hot { fill: var(--amber); }
+.structure-svg .null-label { fill: var(--muted); font: 12px var(--font-code); dominant-baseline: central; }
+.structure-svg .null-label.hot { fill: var(--amber); }
+
+.structure-svg .tree-edge { stroke: var(--muted); stroke-width: 1.5; }
+.structure-svg .tree-edge.hot { stroke: var(--amber); stroke-width: 2.5; }
+.structure-svg .tree-node circle { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.structure-svg .tree-node text { fill: var(--text); font: 13px var(--font-code); text-anchor: middle; dominant-baseline: central; }
+.structure-svg .tree-node.root circle { stroke: var(--ok); stroke-width: 2; }
+.structure-svg .tree-node.on-stack circle { stroke: var(--amber); stroke-width: 2; stroke-dasharray: 4 3; }
+.structure-svg .tree-node.current circle { stroke: var(--amber); stroke-width: 2.5; fill: var(--amber-soft); }
+.structure-svg .tree-node.changed circle { fill: rgba(240, 180, 41, 0.32); }
+.structure-svg .tree-node.flash circle { animation: cell-flash 600ms ease-out; }
+.structure-svg .node-pointer { fill: var(--amber); font: 12px var(--font-code); }
+
+.map-table { border-collapse: collapse; font: 13px var(--font-code); min-width: 180px; }
+.map-table th { text-align: left; font: 600 11px var(--font-ui); color: var(--muted); padding: 2px 12px 4px 8px; }
+.map-table td { border: 1px solid var(--line); padding: 4px 12px 4px 8px; background: var(--panel); }
+.map-table tr.changed td { background: rgba(240, 180, 41, 0.22); }
+.map-table tr.looked-up td { outline: 2px solid #7aa7e0; outline-offset: -2px; }
+.map-table .empty-note { color: var(--muted); font-family: var(--font-ui); }
+.set-members { display: flex; flex-wrap: wrap; gap: 6px; }
+.set-member { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font: 13px var(--font-code); background: var(--panel); }
+.set-member.changed { background: rgba(240, 180, 41, 0.22); border-color: var(--amber); }
+.set-member.looked-up { border-color: #7aa7e0; border-width: 2px; }
+
+.op-list { display: flex; flex-direction: column; gap: 4px; }
+.op-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; font-size: 13px; }
+.op-row .label { color: var(--muted); font-size: 12px; }
+.op-call { font-family: var(--font-code); font-size: 13px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.op-call[data-kind="push"], .op-call[data-kind="enqueue"], .op-call[data-kind="insert"] { border-color: var(--amber); color: var(--amber); }
+.op-call[data-kind="pop"], .op-call[data-kind="dequeue"], .op-call[data-kind="remove"] { border-color: var(--err); color: var(--err); }
+.op-call[data-kind="lookup"] { border-color: #7aa7e0; color: #a9c6ef; }
+
 /* ---------- Statistics bar ---------- */
 .stats-bar {
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--stat-count, 7), minmax(0, 1fr));
     border-top: 1px solid var(--line);
 }
 .stat {
@@ -385,7 +438,19 @@ select {
     gap: 8px;
 }
 .algo-card header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.algo-card h3 { margin: 0; font-size: 15px; }
+.algo-card h3, .algo-card h4 { margin: 0; font-size: 15px; }
+.structures-used { display: flex; flex-direction: column; gap: 10px; }
+.structures-used > h3 { margin: 4px 0 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+.cost-table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.cost-table th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; padding: 0 8px 4px 0; }
+.cost-table td { padding: 3px 8px 3px 0; border-top: 1px solid var(--line); }
+.cost-table td:first-child, .cost-table td:last-child { font-family: var(--font-code); }
+.measure-box { display: flex; flex-direction: column; gap: 4px; }
+.measure-title { margin: 0; color: var(--muted); font-size: 12px; }
+.measures { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin: 0; }
+.measures div { background: var(--panel); border-radius: var(--radius-control); padding: 4px 8px; }
+.measures dt { color: var(--muted); font-size: 11px; }
+.measures dd { margin: 0; font: 600 14px var(--font-code); }
 .algo-where { color: var(--muted); font: 12px var(--font-code); }
 .algo-tag {
     margin-left: auto;
@@ -513,7 +578,7 @@ select {
     }
     .viz-body { grid-template-columns: 1fr; }
     .viz-side { border-left: 0; border-top: 1px solid var(--line); }
-    .stats-bar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .stats-bar { grid-template-columns: repeat(min(4, var(--stat-count, 4)), minmax(0, 1fr)); }
     .stat { border-bottom: 1px solid var(--line); }
     .variables, .output, .problems, .viz-main { min-height: 160px; }
     .editor { min-height: 50vh; }
@@ -523,4 +588,5 @@ select {
 @media (prefers-reduced-motion: reduce) {
     .array-svg .cell.flash rect { animation: none; }
     .stat, .bound-fill { transition: none; }
+    .structure-svg .list-node.flash rect:first-child, .structure-svg .tree-node.flash circle { animation: none; }
 }

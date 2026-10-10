@@ -53,7 +53,7 @@ final class SameLineLoops {
         return targets;
     }
 
-    private static int lineAt(List<Location> lines, long codeIndex) {
+    static int lineAt(List<Location> lines, long codeIndex) {
         int line = -1;
         for (Location l : lines) {
             if (l.codeIndex() > codeIndex) {
@@ -84,7 +84,7 @@ final class SameLineLoops {
         return -1;
     }
 
-    private static int instructionLength(byte[] code, int pc, int op) {
+    static int instructionLength(byte[] code, int pc, int op) {
         switch (op) {
             case 0x10, 0x12, 0x15, 0x16, 0x17, 0x18, 0x19, 0x36, 0x37, 0x38, 0x39, 0x3a, 0xa9, 0xbc:
                 return 2;

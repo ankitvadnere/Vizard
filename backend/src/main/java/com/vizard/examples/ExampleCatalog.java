@@ -22,7 +22,7 @@ public class ExampleCatalog {
 
     private static final String FOLDER = "examples/";
 
-    private record Entry(String id, String title, String group, String stdin, String algorithm) {
+    private record Entry(String id, String title, String group, String stdin, List<String> algorithms) {
     }
 
     private final List<Example> examples;
@@ -47,7 +47,8 @@ public class ExampleCatalog {
         for (Entry e : entries) {
             try (InputStream code = resource(e.id() + ".java")) {
                 String source = new String(code.readAllBytes(), StandardCharsets.UTF_8);
-                result.add(new Example(e.id(), e.title(), e.group(), source, e.stdin(), e.algorithm()));
+                result.add(new Example(e.id(), e.title(), e.group(), source, e.stdin(),
+                        e.algorithms() == null ? List.of() : List.copyOf(e.algorithms())));
             } catch (IOException ex) {
                 throw new UncheckedIOException("Could not read example " + e.id(), ex);
             }

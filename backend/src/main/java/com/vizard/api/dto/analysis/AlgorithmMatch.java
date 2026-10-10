@@ -11,6 +11,7 @@ import java.util.List;
  * @param line     line where that method starts
  * @param evidence why it was recognised, in plain words
  * @param bound    worst-case operation count for this input; null if not applicable
+ * @param measures facts measured from this run that the complexity depends on (tree height...); may be empty
  */
 public record AlgorithmMatch(
         String id,
@@ -20,6 +21,7 @@ public record AlgorithmMatch(
         int line,
         List<String> evidence,
         ComplexityInfo complexity,
-        OperationBound bound
+        OperationBound bound,
+        List<Measure> measures
 ) {
 }

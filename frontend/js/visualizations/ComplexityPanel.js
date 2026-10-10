@@ -24,26 +24,30 @@ export class ComplexityPanel {
         this.meters = [];
         this.container.replaceChildren();
         const algorithms = analysis?.algorithms ?? [];
-        this.dot.hidden = algorithms.length === 0;
+        const structures = analysis?.structures ?? [];
+        this.dot.hidden = algorithms.length === 0 && structures.length === 0;
 
         if (algorithms.length === 0) {
             this.container.append(
-                paragraph("complexity-empty",
-                    "No known algorithm recognised in this program."),
+                paragraph("complexity-empty", "No known algorithm recognised in this program."),
                 paragraph("complexity-footnote",
                     "Vizard reports complexity only for algorithms it can identify from the structure of the code "
-                    + "(bubble, selection, insertion, merge and quick sort; linear and binary search). It does not "
-                    + "guess the complexity of arbitrary code. The operation counts below the visualization are "
+                    + "(sorting and searching; BST search, insertion and deletion; tree traversals; linked list "
+                    + "reversal). It does not guess the complexity of arbitrary code. The operation counts are "
                     + "still exact for this run."));
-            return;
         }
         for (const algorithm of algorithms) {
             this.container.append(this.#card(algorithm, analysis.input, truncated));
         }
-        this.container.append(paragraph("complexity-footnote",
-            "Complexities come from a catalogue of known algorithms, matched by code structure and adjusted "
-            + "for details Vizard can see (such as an early-exit flag). n is the length of the largest array "
-            + "the program used."));
+        if (structures.length > 0) {
+            this.container.append(structureSection(structures));
+        }
+        if (algorithms.length > 0) {
+            this.container.append(paragraph("complexity-footnote",
+                "Complexities come from a catalogue of known algorithms, matched by code structure and adjusted "
+                + "for details Vizard can see (such as an early-exit flag). n is the length of the largest array "
+                + "the program used, or the number of nodes in its tree or list."));
+        }
     }
 
     render(step) {
@@ -92,6 +96,9 @@ export class ComplexityPanel {
 
         if (algorithm.bound && input) {
             card.append(this.#meter(algorithm.bound, input, truncated));
+        }
+        if (algorithm.measures?.length) {
+            card.append(measureList(algorithm.measures));
         }
 
         const why = document.createElement("details");
@@ -143,6 +150,71 @@ export class ComplexityPanel {
         });
         return box;
     }
+}
+
+/** "Nodes n 7 · Height h 2 · ..." measured from this run. */
+function measureList(measures) {
+    const dl = document.createElement("dl");
+    dl.className = "measures";
+    for (const m of measures) {
+        const cell = document.createElement("div");
+        const dt = document.createElement("dt");
+        dt.textContent = m.label;
+        const dd = document.createElement("dd");
+        dd.textContent = m.value;
+        cell.append(dt, dd);
+        dl.append(cell);
+    }
+    const box = document.createElement("div");
+    box.className = "measure-box";
+    box.append(paragraph("measure-title", "Measured in this run"), dl);
+    return box;
+}
+
+const ROLE_WORDS = {
+    stack: "a stack", queue: "a queue", deque: "a deque", list: "a list",
+    "priority-queue": "a priority queue", map: "a map", set: "a set",
+};
+
+/** Each collection the run used, the calls it made on it, and what one call costs. */
+function structureSection(structures) {
+    const section = document.createElement("section");
+    section.className = "structures-used";
+    const h = document.createElement("h3");
+    h.textContent = "Data structures used";
+    section.append(h);
+    for (const s of structures) {
+        const card = document.createElement("article");
+        card.className = "algo-card";
+        const head = document.createElement("header");
+        const title = document.createElement("h4");
+        title.textContent = s.variable ?? s.type;
+        const where = document.createElement("span");
+        where.className = "algo-where";
+        where.textContent = `${s.type}, used as ${ROLE_WORDS[s.role] ?? s.role}`;
+        head.append(title, where);
+        card.append(head);
+
+        const table = document.createElement("table");
+        table.className = "cost-table";
+        const headRow = table.createTHead().insertRow();
+        for (const label of ["Operation", "Calls in this run", "Cost of one call"]) {
+            const th = document.createElement("th");
+            th.textContent = label;
+            headRow.append(th);
+        }
+        const body = table.createTBody();
+        for (const op of s.operations) {
+            const row = body.insertRow();
+            row.insertCell().textContent = op.method;
+            row.insertCell().textContent = String(op.count);
+            row.insertCell().textContent = op.cost;
+        }
+        card.append(table);
+        if (s.note) card.append(paragraph("algo-note", s.note));
+        section.append(card);
+    }
+    return section;
 }
 
 function paragraph(className, text) {

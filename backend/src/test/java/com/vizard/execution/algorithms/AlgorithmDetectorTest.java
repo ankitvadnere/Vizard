@@ -20,7 +20,7 @@ class AlgorithmDetectorTest {
     void everyExampleIsRecognisedAsItsAlgorithmAndNothingElse() {
         for (Example example : new ExampleCatalog().all()) {
             List<String> found = detect(example.code()).stream().map(d -> d.algorithm().id()).toList();
-            List<String> expected = example.algorithm() == null ? List.of() : List.of(example.algorithm());
+            List<String> expected = example.algorithms();
             assertThat(found).as(example.id()).isEqualTo(expected);
         }
     }

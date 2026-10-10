@@ -3,7 +3,8 @@
 // Cell styles come from the step's insight: compared / read / written by this line / just changed.
 // Rendering is a pure function of the step; the swap animation is only a transition into it.
 
-import { formatValue } from "../values.js";
+import { cellValue as formatValue } from "../values.js";
+import { visibleObjects } from "./visible.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const CELL = 46;          // cell width and height
@@ -89,7 +90,7 @@ export class ArrayVisualizer {
 
         const block = document.createElement("div");
         block.className = "array-block";
-        block.append(title(names, object.type.replace("[]", `[${object.length}]`)));
+        block.append(title(names, sizeLabel(object)));
         const scroll = document.createElement("div");
         scroll.className = "array-scroll";
         scroll.append(svg);
@@ -125,7 +126,7 @@ export class ArrayVisualizer {
 
         const block = document.createElement("div");
         block.className = "array-block";
-        block.append(title(names, object.type.replace("[]", `[${object.length}]`)));
+        block.append(title(names, sizeLabel(object)));
         const scroll = document.createElement("div");
         scroll.className = "array-scroll";
         scroll.append(svg);
@@ -136,26 +137,22 @@ export class ArrayVisualizer {
 
 // ---------- data from the step ----------
 
-/** Arrays referenced by the current method's variables and by static fields; aliases share one drawing. */
+/**
+ * Arrays and lists the current method can see (its variables, static fields, and fields of its
+ * objects such as this.items); several names for one array share one drawing.
+ */
 function visibleArrays(step) {
-    const byRef = new Map();
-    const variables = [...step.stack[0].variables, ...step.statics];
-    for (const v of variables) {
-        if (v.value.kind !== "ref") continue;
-        const object = step.heap[v.value.ref];
-        if (!object || object.kind !== "array") continue;
-        if (v.name === "args" && object.length === 0) continue; // main's empty String[] args
-        const entry = byRef.get(object.id) ?? { names: [], object };
-        entry.names.push(v.name);
-        byRef.set(object.id, entry);
-    }
-    return [...byRef.values()];
+    return [...visibleObjects(step).values()].filter(({ object }) => isSequence(object));
+}
+
+function isSequence(object) {
+    return object.kind === "array" || (object.kind === "collection" && object.role === "list");
 }
 
 function isMatrix(object, heap) {
     const refs = object.elements.filter((e) => e.kind === "ref");
     return refs.length > 0 && refs.length === object.elements.filter((e) => e.kind !== "null").length
-        && refs.every((e) => heap[e.ref]?.kind === "array");
+        && refs.every((e) => heap[e.ref] && isSequence(heap[e.ref]));
 }
 
 /** index → css class. Later rules win: changed > target > compared > read. */
@@ -249,6 +246,11 @@ function text(className, x, y, content, anchor) {
     if (anchor) node.setAttribute("text-anchor", anchor);
     node.textContent = content;
     return node;
+}
+
+/** "int[4]" for an array, "ArrayList · size 3" for a list. */
+function sizeLabel(object) {
+    return object.kind === "array" ? object.type.replace("[]", `[${object.length}]`) : `${object.type} · size ${object.length}`;
 }
 
 function title(names, meta) {

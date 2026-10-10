@@ -1,6 +1,6 @@
 # Vizard roadmap
 
-Updated after Milestone 4. The original brief planned seven milestones; this version adds
+Updated after Milestone 5. The original brief planned seven milestones; this version adds
 backtracking, dynamic programming and branch and bound, the core design paradigms of a DAA
 course, each with its own visualization and complexity analysis.
 
@@ -12,6 +12,7 @@ course, each with its own visualization and complexity analysis.
 | 2. Tracing | Step forward/back through a real JVM trace (debugger-based): line, variables, call stack, output |
 | 3. Visualization | Arrays as SVG with index pointers, compared/changed cells, animated swaps, condition cards, loop counters |
 | 4. Sorting & searching | Live operation counts, active ranges, algorithm recognition + complexity catalogue for 7 algorithms |
+| 5. Data structures | Collection contents and operations; stacks, queues, heaps, maps, sets, linked lists and trees drawn; BST, traversal and reversal recognition with measured tree height; cost of each collection call |
 
 ## Principles for every remaining milestone
 
@@ -29,7 +30,7 @@ These come from what Milestones 1–4 taught us, including the N-Queens misdetec
 6. **Keep inputs teachable.** Examples use small inputs (n = 4–8) so a trace fits in the step limit
    and a student can follow every step.
 
-## Milestone 5 — Data structures and collections
+## Milestone 5 — Data structures and collections (done)
 
 Prerequisite for everything after it: graphs, backtracking, DP and branch and bound all keep their
 state in collections.
