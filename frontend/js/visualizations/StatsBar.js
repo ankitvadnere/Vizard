@@ -17,6 +17,9 @@ const COUNTERS = [
     ["inserts", "Inserts", "add, put and set on lists, maps and sets"],
     ["removes", "Removes", "Removals from lists, maps and sets"],
     ["lookups", "Lookups", "get, contains, containsKey and peek"],
+    ["verticesVisited", "Vertices visited", "Graph vertices visited so far (settled, for Dijkstra)"],
+    ["edgesExamined", "Edges examined", "Neighbour-loop iterations: one per edge looked at (per matrix cell for a matrix)"],
+    ["relaxations", "Relaxations", "Distance improvements: dist[v] = dist[u] + w"],
 ];
 const MIN_SHOWN = ["comparisons", "swaps", "loopIterations"];
 

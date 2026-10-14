@@ -10,16 +10,23 @@ import java.util.Map;
  * @param loops       every loop in the file
  * @param accesses    array accesses keyed by line
  * @param methods     methods and constructors with their line ranges and pointer variables
+ * @param graphs      graph traversals: one per loop over a vertex's neighbours
  */
 public record CodeModel(
         Map<Integer, List<ConditionSite>> conditions,
         List<LoopSite> loops,
         Map<Integer, List<ArrayAccessSite>> accesses,
-        List<MethodSite> methods
+        List<MethodSite> methods,
+        List<GraphSpec> graphs
 ) {
 
+    public CodeModel(Map<Integer, List<ConditionSite>> conditions, List<LoopSite> loops,
+                     Map<Integer, List<ArrayAccessSite>> accesses, List<MethodSite> methods) {
+        this(conditions, loops, accesses, methods, List.of());
+    }
+
     public static CodeModel empty() {
-        return new CodeModel(Map.of(), List.of(), Map.of(), List.of());
+        return new CodeModel(Map.of(), List.of(), Map.of(), List.of(), List.of());
     }
 
     /**
@@ -90,6 +97,48 @@ public record CodeModel(
 
         boolean contains(int line) {
             return line >= startLine && line <= endLine;
+        }
+    }
+
+    /**
+     * A loop over the neighbours of a vertex, and the state the traversal around it keeps.
+     * Found by {@link GraphModelBuilder} from the code's structure; variable names don't matter.
+     *
+     * @param method        method containing the loop
+     * @param graph         the graph variable: adj, graph, this.adj
+     * @param shape         "list": for-each over the neighbours (adj.get(u), adj[u], map.get(u));
+     *                      "matrix": index loop over a row, testing g[u][v]
+     * @param vertex        the vertex whose neighbours are scanned (u)
+     * @param neighbor      the loop variable (v, or an edge e)
+     * @param loopLine      line of the neighbour loop's header
+     * @param bodyStart     first line of its body
+     * @param bodyEnd       last line of its body
+     * @param target        how to get the neighbour vertex from the loop variable: "" (itself),
+     *                      "[0]" (an int[] edge), ".to" (an Edge object)
+     * @param weight        how to get the edge weight, same notation; for a matrix "cell"; null if unweighted
+     * @param visited       visited array or set, or null
+     * @param dist          distance array or map, or null
+     * @param parent        parent / predecessor array or map, or null
+     * @param frontier      the queue, stack or priority queue holding vertices still to process, or null
+     * @param frontierVertex how to get the vertex from a frontier element ("", "[1]", ".v"), or null if unknown
+     * @param frontierOrder "queue", "stack" or "priority", or null
+     * @param recursive     the method calls itself with the neighbour (recursive DFS)
+     * @param relaxes       {@code if (dist[u] + w < dist[v]) dist[v] = dist[u] + w}: an edge relaxation
+     * @param levels        {@code dist[v] = dist[u] + 1}: BFS levels
+     * @param minScan       the next vertex is picked by scanning for the smallest distance (array Dijkstra)
+     */
+    public record GraphSpec(String method, int methodStart, int methodEnd, Expr graph, String shape,
+                            String vertex, String neighbor, int loopLine, int bodyStart, int bodyEnd,
+                            String target, String weight, String visited, String dist, String parent,
+                            String frontier, String frontierVertex, String frontierOrder,
+                            boolean recursive, boolean relaxes, boolean levels, boolean minScan) {
+
+        boolean bodyContains(int line) {
+            return line >= bodyStart && line <= bodyEnd;
+        }
+
+        boolean methodContains(int line) {
+            return line >= methodStart && line <= methodEnd;
         }
     }
 }

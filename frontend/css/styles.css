@@ -383,6 +383,45 @@ select {
 .structure-svg .tree-node.current circle { stroke: var(--amber); stroke-width: 2.5; fill: var(--amber-soft); }
 .structure-svg .tree-node.changed circle { fill: rgba(240, 180, 41, 0.32); }
 .structure-svg .tree-node.flash circle { animation: cell-flash 600ms ease-out; }
+
+/* ---------- Graphs ---------- */
+.graph-svg .graph-edge { stroke: #56647d; stroke-width: 1.6; }
+.graph-svg .graph-edge.new { stroke: var(--text); }
+.graph-svg .graph-edge.tree { stroke: var(--ok); stroke-width: 3; }
+.graph-svg .graph-edge.hot { stroke: var(--amber); stroke-width: 3.5; }
+.graph-svg .graph-edge.probe { stroke: var(--amber); stroke-width: 1.5; stroke-dasharray: 3 4; opacity: 0.8; }
+.graph-svg .graph-arrowhead { fill: #56647d; }
+.graph-svg .graph-arrowhead.hot { fill: var(--amber); }
+.graph-svg .edge-weight rect { fill: var(--ink); stroke: var(--line); }
+.graph-svg .edge-weight text { fill: var(--muted); font: 11px var(--font-code); dominant-baseline: central; }
+.graph-svg .edge-weight.hot rect { stroke: var(--amber); }
+.graph-svg .edge-weight.hot text { fill: var(--amber); }
+.graph-svg .graph-vertex circle { fill: var(--panel); stroke: var(--line); stroke-width: 1.8; }
+.graph-svg .graph-vertex .vertex-label { fill: var(--text); font: 13px var(--font-code); dominant-baseline: central; }
+.graph-svg .graph-vertex.visited circle { fill: rgba(79, 192, 141, 0.2); stroke: var(--ok); }
+.graph-svg .graph-vertex.frontier circle { stroke: var(--amber); stroke-dasharray: 4 3; stroke-width: 2; }
+.graph-svg .graph-vertex.on-stack circle { stroke: var(--amber); stroke-width: 2.2; }
+.graph-svg .graph-vertex.target circle { stroke: var(--amber); stroke-width: 3; }
+.graph-svg .graph-vertex.current circle { fill: var(--amber); stroke: var(--amber); }
+.graph-svg .graph-vertex.current .vertex-label { fill: #1f1603; font-weight: 600; }
+.graph-svg .visit-order { fill: var(--ok); font: 10px var(--font-code); }
+.graph-svg .vertex-dist { fill: var(--muted); font: 11px var(--font-code); dominant-baseline: central; }
+.graph-svg .vertex-dist.changed { fill: var(--amber); font-weight: 600; }
+.graph-state { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; font-size: 13px; }
+.graph-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.graph-line-label { color: var(--muted); min-width: 92px; font-size: 12px; }
+.graph-line code { font-family: var(--font-code); font-size: 12.5px; }
+.dist-table { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.dist-cell { font: 12px var(--font-code); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; }
+.dist-cell b { color: var(--muted); font-weight: 400; margin-right: 2px; }
+.dist-cell.changed { border-color: var(--amber); background: var(--amber-soft); }
+.graph-legend { margin-top: 4px; padding: 0; border: 0; }
+.swatch.graph-current { background: var(--amber); border-color: var(--amber); border-radius: 50%; }
+.swatch.graph-frontier { border: 2px dashed var(--amber); border-radius: 50%; }
+.swatch.graph-on-stack { border: 2px solid var(--amber); border-radius: 50%; }
+.swatch.graph-visited { background: rgba(79, 192, 141, 0.2); border-color: var(--ok); border-radius: 50%; }
+.swatch.graph-tree { height: 0; border: 0; border-top: 3px solid var(--ok); border-radius: 0; }
+.swatch.graph-hot { height: 0; border: 0; border-top: 3.5px solid var(--amber); border-radius: 0; }
 .structure-svg .node-pointer { fill: var(--amber); font: 12px var(--font-code); }
 
 .map-table { border-collapse: collapse; font: 13px var(--font-code); min-width: 180px; }

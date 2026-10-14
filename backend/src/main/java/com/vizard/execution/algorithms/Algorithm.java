@@ -16,7 +16,10 @@ public enum Algorithm {
     INORDER("inorder", "Inorder traversal", "Trees"),
     POSTORDER("postorder", "Postorder traversal", "Trees"),
     LEVEL_ORDER("level-order", "Level-order traversal (BFS)", "Trees"),
-    LIST_REVERSAL("list-reversal", "Linked list reversal", "Linked lists");
+    LIST_REVERSAL("list-reversal", "Linked list reversal", "Linked lists"),
+    BFS("bfs", "Breadth-first search (BFS)", "Graphs"),
+    DFS("dfs", "Depth-first search (DFS)", "Graphs"),
+    DIJKSTRA("dijkstra", "Dijkstra's shortest paths", "Graphs");
 
     private final String id;
     private final String displayName;

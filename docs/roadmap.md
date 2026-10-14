@@ -1,6 +1,6 @@
 # Vizard roadmap
 
-Updated after Milestone 5. The original brief planned seven milestones; this version adds
+Updated after Milestone 6. The original brief planned seven milestones; this version adds
 backtracking, dynamic programming and branch and bound, the core design paradigms of a DAA
 course, each with its own visualization and complexity analysis.
 
@@ -13,6 +13,7 @@ course, each with its own visualization and complexity analysis.
 | 3. Visualization | Arrays as SVG with index pointers, compared/changed cells, animated swaps, condition cards, loop counters |
 | 4. Sorting & searching | Live operation counts, active ranges, algorithm recognition + complexity catalogue for 7 algorithms |
 | 5. Data structures | Collection contents and operations; stacks, queues, heaps, maps, sets, linked lists and trees drawn; BST, traversal and reversal recognition with measured tree height; cost of each collection call |
+| 6. Graphs | Graphs found by their neighbour loop (lists, maps, matrices, weighted edges); drawn with current vertex, frontier, visited set, examined edge, recursion path, distances and the BFS/DFS/shortest-path tree; BFS, DFS (recursive and iterative) and Dijkstra (heap and array) recognised with the representation deciding the complexity; vertices visited, edges examined and relaxations counted |
 
 ## Principles for every remaining milestone
 
@@ -51,7 +52,11 @@ state in collections.
   O(n) skewed, with the current tree height shown).
 - **Examples**: stack (balanced brackets), queue, linked list reverse, BST insert/search, traversals.
 
-## Milestone 6 — Graphs
+## Milestone 6 — Graphs (done)
+
+Delivered as planned, with two differences: the layout is Vizard's own deterministic
+force-directed layout (no D3 dependency), and edge lists (Bellman–Ford style) are not drawn as
+graphs, because they have no neighbour loop to anchor the traversal state to.
 
 - **Graph detection** from adjacency matrices (`int[][]`), adjacency lists
   (`List<List<Integer>>`, `List<Integer>[]`, `Map<Integer, List<…>>`) and edge lists.

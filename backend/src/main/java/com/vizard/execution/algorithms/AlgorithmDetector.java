@@ -57,7 +57,8 @@ public final class AlgorithmDetector {
             if (m.getBody().isEmpty()) {
                 continue;
             }
-            Optional<Detection> d = StructureAlgorithms.detect(m, nodeClasses)
+            Optional<Detection> d = GraphAlgorithms.detect(m, cu)
+                    .or(() -> StructureAlgorithms.detect(m, nodeClasses))
                     .or(() -> mergeSort(m, methodsByName))
                     .or(() -> quickSort(m, methodsByName))
                     .or(() -> binarySearch(m))
@@ -68,6 +69,8 @@ public final class AlgorithmDetector {
             d.ifPresent(found::add);
         }
         found.removeIf(d -> isHelperOfUnknownRecursion(d, cu, found));
+        List<Detection> recognised = List.copyOf(found);
+        found.removeIf(d -> GraphAlgorithms.isPartOf(d, recognised, cu)); // e.g. minDistance() inside Dijkstra
         found.sort((a, b) -> Integer.compare(a.line(), b.line()));
         return found;
     }

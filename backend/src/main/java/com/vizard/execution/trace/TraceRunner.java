@@ -8,6 +8,7 @@ import com.vizard.api.dto.analysis.OperationCost;
 import com.vizard.api.dto.analysis.StructureUse;
 import com.vizard.api.dto.analysis.ProgramAnalysis;
 import com.vizard.api.dto.trace.FrameSnapshot;
+import com.vizard.api.dto.trace.GraphInsight;
 import com.vizard.api.dto.trace.HeapObjectSnapshot;
 import com.vizard.api.dto.trace.StructureOperation;
 import com.vizard.api.dto.trace.VariableSnapshot;
@@ -102,7 +103,7 @@ public class TraceRunner {
     private static ProgramAnalysis analyse(PreparedProgram program, List<TraceStep> steps) {
         InputSize input = inputSize(steps);
         Integer n = input == null ? null : input.n();
-        StructureFacts facts = structureFacts(steps);
+        StructureFacts facts = graphFacts(structureFacts(steps), steps);
         List<AlgorithmMatch> matches = program.algorithms().stream()
                 .map(d -> AlgorithmCatalog.describe(d, n, facts))
                 .toList();
@@ -146,6 +147,29 @@ public class TraceRunner {
     }
 
     private static String variableFor(List<TraceStep> steps, long ref) {
+        String direct = directVariable(steps, ref);
+        if (direct != null) {
+            return direct;
+        }
+        // No variable holds it directly: an element of another collection, e.g. the inner lists of adj.
+        for (TraceStep step : steps) {
+            for (HeapObjectSnapshot container : step.heap().values()) {
+                boolean holds = container.elements().stream().anyMatch(e -> e.ref() != null && e.ref() == ref)
+                        || container.entries() != null && container.entries().stream()
+                        .anyMatch(e -> e.value().ref() != null && e.value().ref() == ref);
+                if (holds && container.id() != ref) {
+                    String outer = directVariable(steps, container.id());
+                    if (outer != null) {
+                        return "array".equals(container.kind()) ? outer + "[…]" : outer + ".get(…)";
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** A variable that refers to the object directly. */
+    private static String directVariable(List<TraceStep> steps, long ref) {
         for (TraceStep step : steps) {
             for (FrameSnapshot frame : step.stack()) {
                 for (VariableSnapshot v : frame.variables()) {
@@ -214,6 +238,19 @@ public class TraceRunner {
             }
         }
         return new StructureFacts(bestTree, bestHeight, bestList);
+    }
+
+    /** V and E of the largest graph any step drew (the graph as complete as it got). */
+    static StructureFacts graphFacts(StructureFacts facts, List<TraceStep> steps) {
+        GraphInsight best = null;
+        for (TraceStep step : steps) {
+            GraphInsight g = step.insight() == null ? null : step.insight().graph();
+            if (g != null && (best == null || g.edges().size() > best.edges().size()
+                    || g.edges().size() == best.edges().size() && g.vertices().size() > best.vertices().size())) {
+                best = g;
+            }
+        }
+        return best == null ? facts : facts.withGraph(best.vertices().size(), best.edges().size(), best.directed());
     }
 
     /** {node count, height in edges} of the subtree, guarding against cycles. */

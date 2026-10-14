@@ -3,6 +3,7 @@
 import { ArrayVisualizer } from "./ArrayVisualizer.js";
 import { InsightStrip } from "./InsightStrip.js";
 import { CallStackVisualizer } from "./CallStackVisualizer.js";
+import { GraphVisualizer } from "./GraphVisualizer.js";
 import { StatsBar } from "./StatsBar.js";
 import { StructureVisualizer } from "./StructureVisualizer.js";
 
@@ -10,6 +11,8 @@ export class VisualizationPanel {
     constructor() {
         this.label = document.getElementById("viz-label");
         this.arraysEl = document.getElementById("arrays");
+        this.graphEl = document.getElementById("graph");
+        this.graph = new GraphVisualizer(this.graphEl);
         this.legend = document.getElementById("viz-legend");
         this.insights = new InsightStrip(document.getElementById("insights"));
         this.arrays = new ArrayVisualizer(this.arraysEl);
@@ -23,6 +26,7 @@ export class VisualizationPanel {
         this.label.textContent = "";
         this.insights.clear();
         this.arraysEl.replaceChildren(note("viz-empty", message));
+        this.graphEl.replaceChildren();
         this.structuresEl.replaceChildren();
         this.callStack.showEmpty();
         this.stats.hide();
@@ -33,17 +37,22 @@ export class VisualizationPanel {
      * @param animate  true when arriving from the previous step, so changes can be animated
      * @param previous the step that executed just before (for highlighting counters it increased)
      */
-    /** Called once per trace with its last step, so the stats bar shows only the counters this run uses. */
-    load(lastStep) {
-        this.stats.configure(lastStep?.stats ?? null);
+    /**
+     * Called once per trace: the stats bar shows only the counters this run uses (from the last step),
+     * and each graph gets one layout for the whole trace.
+     */
+    load(steps) {
+        this.stats.configure(steps.at(-1)?.stats ?? null);
+        this.graph.load(steps);
     }
 
     render(step, { animate = false, previous = null } = {}) {
         this.label.textContent = `line ${step.line}`;
         this.insights.render(step);
+        const graphs = this.graph.render(step, previous);
         const arrays = this.arrays.render(step, { animate });
         const structures = this.structures.render(step, previous);
-        if (arrays + structures === 0) {
+        if (arrays + structures + graphs === 0) {
             this.arraysEl.append(note("viz-note", "No arrays or data structures in this method."));
         }
         this.legend.hidden = arrays === 0;

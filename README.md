@@ -3,10 +3,10 @@
 Interactive Java code execution, step-by-step debugging and algorithm visualization, built as a
 Design and Analysis of Algorithms course project.
 
-> Status: **Milestone 5** — step through Java forwards and backwards and *see* it run: arrays, pointers,
+> Status: **Milestone 6** — step through Java forwards and backwards and *see* it run: arrays, pointers,
 > conditions and loops; stacks, queues, priority queues, maps and sets; your own linked lists and binary
-> trees. Live operation counts, and complexity analysis for the sorting, searching, tree and list
-> algorithms taught in DAA.
+> trees; graphs with BFS, DFS and Dijkstra traversals. Live operation counts, and complexity analysis for
+> the sorting, searching, tree, list and graph algorithms taught in DAA.
 
 ## Screenshots
 
@@ -35,6 +35,24 @@ and the Complexity tab shows the tree's measured height.
 Bracket matching with a stack: the popped `(` stays one step as a ghost above the new top.
 
 ![Stack pop](docs/screenshots/stack-pop.png)
+
+BFS: vertex 1 is being processed and edge 1 → 4 examined; 2 and 3 wait in the queue (dashed), the
+green edges are the BFS tree so far and `#n` is the visit order.
+
+![BFS](docs/screenshots/bfs.png)
+
+Recursive DFS: the outlined vertices are the recursion path 0 → 1 → 3 → 5, one per call on the stack.
+
+![DFS](docs/screenshots/dfs-recursive.png)
+
+Dijkstra with a priority queue: `d=` under each vertex is its distance, the one just relaxed in
+amber; green edges form the shortest-path tree. The Complexity tab compares 2E with the edges examined.
+
+![Dijkstra](docs/screenshots/dijkstra-heap.png)
+
+Dijkstra on an adjacency matrix: every cell of the processed row is checked, so the bound is V².
+
+![Dijkstra on a matrix](docs/screenshots/dijkstra-matrix.png)
 
 ## How it works
 
@@ -110,6 +128,9 @@ Every step carries running totals up to that step, so stepping back rewinds them
 | Pushes / pops | stack operations (`Stack`, or a `Deque` used through `push`/`pop`) |
 | Enqueues / dequeues | queue and priority-queue operations (`offer`/`add` at the rear, `poll`/`remove()` at the front) |
 | Inserts / removes / lookups | `add`, `put`, `set` / `remove` / `get`, `contains`, `containsKey`, `peek` on any collection |
+| Vertices visited | graph vertices visited so far (settled, for Dijkstra) |
+| Edges examined | iterations of the neighbour loop: one per edge looked at, one per cell for a matrix |
+| Relaxations | distance improvements `dist[v] = dist[u] + w` |
 
 Comparisons also count conditions that compare a node's value field, such as `key < root.key` in a BST;
 pointer checks like `root.left == null` are not comparisons. Only the counters a program uses are shown.
@@ -153,6 +174,71 @@ nodes its callers are at are outlined, which shows the path a recursion took.
 | Linked list | `[value│•]` boxes and arrows | new nodes; links that changed (amber) |
 | Binary tree | nodes and edges | current node, call path, new nodes and edges |
 
+### How graphs are found and drawn
+
+**Finding the graph.** Every graph algorithm has a *loop over the neighbours of a vertex*.
+`GraphModelBuilder` finds it in the AST in any of its usual forms, whatever the names:
+
+| Form | Example |
+|---|---|
+| Adjacency list | `for (int v : adj.get(u))`, `for (int v : adj[u])`, `for (String v : graph.get(u))` (a map) |
+| Weighted list | `for (int[] e : adj.get(u))` with `e[0]`/`e[1]`, or `for (Edge e : adj.get(u))` with `e.to` |
+| Index or iterator | `for (int i = 0; i < adj.get(u).size(); i++)`, `Iterator<Integer> it = adj[u].listIterator()` |
+| Adjacency matrix | `for (int v = 0; v < n; v++) if (g[u][v] != 0 ...)` |
+
+A loop only counts if the neighbour is then *used as a vertex*: it indexes a 1-D array (`visited[v]`),
+goes into a collection (`queue.offer(v)`) or into a recursive call (`dfs(v)`). That is what separates
+a graph from a DP table (`dp[i][w]`), Floyd–Warshall or a matrix product, which only index 2-D arrays,
+and from N-Queens (`isSafe(board, row, col)` is a helper call, not a vertex use).
+
+Around the loop, the same AST shows the traversal's state: the **visited** array or set (checked for
+the neighbour, marked somewhere with `= true` or `add`), the **frontier** (the collection the
+neighbour is added to and the vertex is taken from: FIFO queue, stack or priority queue), the
+**distance** array (`dist[v] = dist[u] + w`, a *relaxation* when guarded by `dist[u] + w < dist[v]`,
+a *BFS level* when it adds 1) and a **parent** array (`parent[v] = u`).
+
+**Rebuilding it at every step.** `GraphTracker` reads the graph object from the heap at each step
+(so a graph being built in `main` grows edge by edge), and the state from the variables named above:
+the current vertex `u`, the edge being examined (while inside the loop body), visited vertices,
+the frontier's contents, distances (`∞` for `Integer.MAX_VALUE`), the recursion path (one vertex per
+`dfs` call on the stack), the visit order, and the tree edges: from the parent array if there is one,
+otherwise the vertex that set a distance, discovered the vertex, or pushed it.
+Undirected = every edge u → v has a matching v → u; each such pair is drawn once.
+
+**Drawing it.** The layout is computed once per trace from the most complete graph, by a
+deterministic force-directed algorithm (Fruchterman–Reingold started from a circle), so vertices
+never move while you step and the same graph always looks the same.
+
+| Vertex / edge | Meaning |
+|---|---|
+| Amber fill | the vertex being processed (`u`) |
+| Dashed amber outline | waiting in the queue / stack / priority queue |
+| Amber outline | on the recursion path (recursive DFS) |
+| Green | visited (or processed, for Dijkstra) |
+| `#n` | position in the visit order |
+| `d=…` | distance, amber when it just changed |
+| Thick amber edge | the edge being examined |
+| Green edge | tree edge (BFS tree, DFS tree, shortest-path tree) |
+
+**Recognition and complexity** (`GraphAlgorithms`):
+
+| Algorithm | Recognised by | Time | Edges examined ≤ |
+|---|---|---|---|
+| BFS | FIFO queue + visited marks (or `dist[v] = dist[u] + 1`) | O(V + E) list, O(V²) matrix | 2E undirected / E directed; V² matrix |
+| DFS | recursion on unvisited neighbours, or a stack + visited | O(V + E) list, O(V²) matrix | same |
+| Dijkstra | relaxation + priority queue | O((V+E) log V) | 2E (if outdated entries are skipped) |
+| Dijkstra | relaxation + scan for the closest vertex | O(V²) | V² (matrix) |
+
+The representation the code actually uses decides which line applies. Prim's MST (`key[v] = w`
+without adding), Kahn's topological sort (in-degrees, no visited marks) and Bellman–Ford/SPFA
+(relaxation from a plain queue) share the neighbour loop and are drawn, but deliberately not
+reported as BFS or Dijkstra. A helper such as `minDistance()` inside a recognised Dijkstra is part of
+it, not reported on its own.
+
+**Library callbacks.** A comparator lambda `(a, b) -> a[0] - b[0]` is called by `PriorityQueue`
+on every offer and poll. Those calls come from inside the JDK, not from the program's own control
+flow, so the tracer lets them run without stopping (likewise `compareTo` during `Collections.sort`).
+
 ### How a condition's result is decided
 
 For `if (arr[j] > arr[j + 1])` Vizard shows `5 > 2` and `true`. The values come from a small
@@ -185,17 +271,18 @@ vizard/
 │       │       ├── trace/          JdiTraceSession, HeapReader, CollectionReader, CollectionCalls,
 │       │       │                   SameLineLoops, TraceRunner, ...
 │       │       ├── insight/        CodeModelBuilder, CodeModel, Expr, ExpressionEvaluator,
-│       │       │                   TraceAnnotator, StructureRoles
-│       │       └── algorithms/     AlgorithmDetector, StructureAlgorithms, AlgorithmCatalog,
-│       │                           StructureCosts, StructureFacts, Algorithm, Detection
+│       │       │                   TraceAnnotator, StructureRoles, GraphModelBuilder, GraphTracker
+│       │       └── algorithms/     AlgorithmDetector, StructureAlgorithms, GraphAlgorithms,
+│       │                           AlgorithmCatalog, StructureCosts, StructureFacts, Algorithm, Detection
 │       ├── main/java/com/vizard/examples/   ExampleCatalog
 │       ├── main/resources/examples/         index.json + one .java file per example
 │       ├── main/resources/application.properties
 │       └── test/java/com/vizard/   execution/ExecutionServiceTest, TraceServiceTest, InsightTest,
 │                                   StatisticsTest, CollectionsTest, StructureStatisticsTest,
-│                                   insight/CodeModelBuilderTest, trace/NodeShapeTest,
+│                                   GraphTraceTest, insight/CodeModelBuilderTest,
+│                                   insight/GraphModelBuilderTest, trace/NodeShapeTest,
 │                                   algorithms/AlgorithmDetectorTest, StructureAlgorithmsTest,
-│                                   examples/ExamplesTest
+│                                   GraphAlgorithmsTest, examples/ExamplesTest
 └── frontend/                       Plain HTML/CSS/JS, served by the backend
     ├── index.html
     ├── css/styles.css
@@ -204,7 +291,7 @@ vizard/
         ├── playback/        PlaybackController, PlaybackBar, describeStep
         └── visualizations/  VisualizationPanel, ArrayVisualizer (SVG), StructureVisualizer,
                              StackVisualizer, QueueVisualizer, HeapVisualizer, MapVisualizer,
-                             LinkedListVisualizer, TreeVisualizer, InsightStrip, StatsBar,
+                             LinkedListVisualizer, TreeVisualizer, GraphVisualizer, InsightStrip, StatsBar,
                              ComplexityPanel, CallStackVisualizer, VariableVisualizer,
                              visible.js, svg.js
 ```
@@ -315,6 +402,23 @@ and `"loopBackTo": 5` when stopped on a loop's closing brace. Each step also has
            "methodCalls": 0, "maxDepth": 1, "loopIterations": 2 }
 ```
 
+(plus the collection counters and `verticesVisited`, `edgesExamined`, `relaxations`). When the program
+has a graph, `insight.graph` describes it at that step:
+
+```json
+"graph": {
+  "name": "adj", "ref": 41, "representation": "adjacency-list", "directed": false, "weighted": true,
+  "vertices": ["0", "1", "2", "3", "4"],
+  "edges": [ { "from": "0", "to": "1", "weight": "4" }, { "from": "0", "to": "2", "weight": "1" } ],
+  "current": "1", "examining": { "from": "1", "to": "3", "weight": "1" },
+  "visited": [], "frontier": ["1", "3"], "frontierName": "pq", "frontierOrder": "priority",
+  "onStack": [], "order": ["0", "2", "1"],
+  "treeEdges": [ { "from": "2", "to": "1" }, { "from": "0", "to": "2" } ],
+  "distances": [ { "vertex": "0", "value": "0" }, { "vertex": "4", "value": "∞" } ], "distName": "dist",
+  "truncated": false
+}
+```
+
 The response has an `analysis`:
 
 ```json
@@ -393,9 +497,15 @@ Not allowed: file I/O, network, processes, threads, reflection, `System.exit`, n
 - Only calls your code makes directly on a collection are counted; a call made inside a library method
   (`Collections.sort(list)`) is not. `remove()` on a `PriorityQueue` isn't counted (it lives in a
   superclass).
-- Trees show up to 63 nodes; lists 12 nodes per row. Node classes linking to a list of nodes (graph
-  nodes) are drawn from Milestone 6.
-- Algorithm recognition covers the textbook shapes of fifteen algorithms. Unusual implementations
+- Trees show up to 63 nodes; lists 12 nodes per row.
+- Graphs are found through a loop over a vertex's neighbours. A graph made of node objects that hold a
+  list of neighbour objects (`node.neighbors`), an edge list (`int[][] edges` scanned as a whole, as in
+  Bellman–Ford) and grid BFS (`grid[r][c]` with direction arrays) are not drawn as graphs; their arrays
+  and collections are still shown. Vertices must be ints, chars or strings. Graphs are laid out for
+  readability up to about 15 vertices.
+- User methods called *by library code* (a comparator lambda inside `PriorityQueue`, `compareTo` during
+  `Collections.sort`, `toString` during string concatenation) run without being stepped through.
+- Algorithm recognition covers the textbook shapes of eighteen algorithms. Unusual implementations
   (e.g. a three-way quick sort, or merge sort without a separate merge loop) may not be recognised,
   in which case no complexity is claimed. Counts stay exact either way.
 - Comparisons are counted per evaluated condition, so `if (a[i] > x && a[i] < y)` counts once.

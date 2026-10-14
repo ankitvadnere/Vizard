@@ -19,5 +19,10 @@
   {"id": "hashmap-frequency", "title": "HashMap: word frequency", "group": "Data structures"},
   {"id": "linked-list-reverse", "title": "Linked list: reverse", "group": "Data structures", "algorithms": ["list-reversal"]},
   {"id": "bst", "title": "Binary search tree: insert and search", "group": "Data structures", "algorithms": ["bst-insert", "bst-search"]},
-  {"id": "tree-traversals", "title": "Tree traversals", "group": "Data structures", "algorithms": ["preorder", "inorder", "postorder", "level-order"]}
+  {"id": "tree-traversals", "title": "Tree traversals", "group": "Data structures", "algorithms": ["preorder", "inorder", "postorder", "level-order"]},
+  {"id": "bfs", "title": "Breadth-first search (BFS)", "group": "Graphs", "algorithms": ["bfs"]},
+  {"id": "dfs-recursive", "title": "Depth-first search (recursive)", "group": "Graphs", "algorithms": ["dfs"]},
+  {"id": "dfs-iterative", "title": "Depth-first search (with a stack)", "group": "Graphs", "algorithms": ["dfs"]},
+  {"id": "dijkstra", "title": "Dijkstra (priority queue)", "group": "Graphs", "algorithms": ["dijkstra"]},
+  {"id": "dijkstra-matrix", "title": "Dijkstra (adjacency matrix, no heap)", "group": "Graphs", "algorithms": ["dijkstra"]}
 ]

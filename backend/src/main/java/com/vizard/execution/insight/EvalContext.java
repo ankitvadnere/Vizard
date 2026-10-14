@@ -20,10 +20,15 @@ public final class EvalContext {
     private final HeapObjectSnapshot self;
 
     public EvalContext(TraceStep step) {
+        this(step, 0);
+    }
+
+    /** The variables as seen from one frame of the call stack (0 = the running method). */
+    public EvalContext(TraceStep step, int frame) {
         this.heap = step.heap();
         HeapObjectSnapshot thisObject = null;
-        if (!step.stack().isEmpty()) {
-            for (VariableSnapshot v : step.stack().get(0).variables()) {
+        if (step.stack().size() > frame) {
+            for (VariableSnapshot v : step.stack().get(frame).variables()) {
                 locals.put(v.name(), v.value());
                 if (v.name().equals("this") && v.value().ref() != null) {
                     thisObject = heap.get(v.value().ref().toString());

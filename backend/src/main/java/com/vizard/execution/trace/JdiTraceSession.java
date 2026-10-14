@@ -162,6 +162,8 @@ public final class JdiTraceSession implements AutoCloseable {
                         done = true;
                     } else if (event instanceof ClassPrepareEvent e) {
                         onClassLoaded(e.referenceType());
+                    } else if (event instanceof BreakpointEvent e && isLibraryCallback(e.thread())) {
+                        continue; // e.g. a comparator lambda called by PriorityQueue: not the user's control flow
                     } else if (event instanceof BreakpointEvent e && e.request().getProperty(CALL_SITE) != null) {
                         armNextCall(e.thread());
                     } else if (event instanceof BreakpointEvent e) {
@@ -169,7 +171,7 @@ public final class JdiTraceSession implements AutoCloseable {
                     } else if (event instanceof MethodEntryEvent e) {
                         onCollectionCall(e);
                     } else if (event instanceof MethodExitEvent e) {
-                        if (isInterestingReturn(e.method())) {
+                        if (isInterestingReturn(e.method()) && !isLibraryCallback(e.thread())) {
                             record(e.thread(), "RETURN", e.location().lineNumber(), e.returnValue(), null);
                         }
                     } else if (event instanceof ExceptionEvent e) {
@@ -262,12 +264,37 @@ public final class JdiTraceSession implements AutoCloseable {
         if (name.equals(launcherClassName) || name.startsWith(launcherClassName + "$")) {
             return false;
         }
+        if (name.contains("$$Lambda")) {
+            return false; // the JVM's generated lambda wrapper, not code the user wrote
+        }
         for (String userClass : userClassNames) {
             if (name.equals(userClass) || name.startsWith(userClass + "$")) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * True when the current user method was called by library code rather than by the user's
+     * own code: a comparator lambda inside {@code PriorityQueue.offer}, a {@code compareTo} during
+     * {@code Collections.sort}, a {@code toString} inside string concatenation. These callbacks run
+     * untraced, because stepping into them would interrupt the algorithm with JDK internals.
+     */
+    private boolean isLibraryCallback(ThreadReference thread) {
+        try {
+            int count = Math.min(thread.frameCount(), MAX_FRAMES_SCANNED);
+            for (int i = 1; i < count; i++) {
+                String type = thread.frame(i).location().declaringType().name();
+                if (type.contains("$$Lambda")) {
+                    continue; // the wrapper between the library and the lambda body
+                }
+                return !isUserClass(type) && !type.equals(launcherClassName);
+            }
+            return false;
+        } catch (IncompatibleThreadStateException | com.sun.jdi.InternalException e) {
+            return false;
+        }
     }
 
     /** At a call instruction on a line that uses a collection: catch the next method entered on this thread. */

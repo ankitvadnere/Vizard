@@ -53,6 +53,7 @@ public final class TraceAnnotator {
         Deque<FrameLoops> frames = new ArrayDeque<>();
         List<TraceStep> out = new ArrayList<>(steps.size());
         StatsCounter stats = new StatsCounter();
+        GraphTracker graphs = new GraphTracker(steps, model.graphs());
 
         for (int k = 0; k < steps.size(); k++) {
             TraceStep step = steps.get(k);
@@ -61,7 +62,8 @@ public final class TraceAnnotator {
                 continue;
             }
             int[] iterationsStarted = {0};
-            List<LoopInsight> loops = trackLoops(frames, step, model, iterationsStarted);
+            List<Integer> startedHeaders = new ArrayList<>();
+            List<LoopInsight> loops = trackLoops(frames, step, model, iterationsStarted, startedHeaders);
 
             EvalContext here = new EvalContext(step);
             ConditionSite condition = first(model.conditions().get(step.line()));
@@ -97,7 +99,8 @@ public final class TraceAnnotator {
                     pointers(model, step, here),
                     loops,
                     ranges(model, step, here),
-                    loopBackTo(model, step));
+                    loopBackTo(model, step),
+                    graphs.active() ? graphs.track(k) : null);
 
             // One-line loops have no iteration counter; each true check of their condition starts one.
             if (conditionInsight != null && Boolean.TRUE.equals(conditionInsight.result())
@@ -107,6 +110,15 @@ public final class TraceAnnotator {
             boolean comparesValues = conditionInsight != null
                     && ExpressionEvaluator.comparesValueField(condition.expression(), conditionState);
             stats.count(steps, k, insight, iterationsStarted[0], comparesValues);
+            if (insight.graph() != null) {
+                stats.verticesVisited = insight.graph().order().size();
+                stats.relaxations += graphs.newRelaxations;
+            }
+            for (int header : startedHeaders) {
+                if (graphs.isNeighbourLoop(step, header)) {
+                    stats.edgesExamined++;
+                }
+            }
             out.add(step.withAnnotations(insight, stats.snapshot(k, step)));
         }
         return out;
@@ -149,6 +161,9 @@ public final class TraceAnnotator {
         int calls;
         int maxDepth;
         int iterations;
+        int verticesVisited;
+        int edgesExamined;
+        int relaxations;
         final Map<String, Integer> structureOps = new HashMap<>();
 
         void count(List<TraceStep> steps, int k, StepInsight insight, int iterationsStarted, boolean comparesValues) {
@@ -210,7 +225,8 @@ public final class TraceAnnotator {
         ExecutionStats snapshot(int k, TraceStep step) {
             return new ExecutionStats(k + 1, comparisons, swaps, reads, writes, calls,
                     Math.max(maxDepth, step.depth()), iterations, op("push"), op("pop"), op("enqueue"),
-                    op("dequeue"), op("insert"), op("remove"), op("lookup"));
+                    op("dequeue"), op("insert"), op("remove"), op("lookup"), verticesVisited, edgesExamined,
+                    relaxations);
         }
 
         private int op(String kind) {
@@ -414,7 +430,7 @@ public final class TraceAnnotator {
     }
 
     private static List<LoopInsight> trackLoops(Deque<FrameLoops> frames, TraceStep step, CodeModel model,
-                                                int[] iterationsStarted) {
+                                                int[] iterationsStarted, List<Integer> startedHeaders) {
         int depth = step.depth();
         while (frames.size() > depth) {
             frames.pop();
@@ -448,6 +464,7 @@ public final class TraceAnnotator {
             } else if (startsIteration(loop, previous, line)) {
                 count++;
                 iterationsStarted[0]++;
+                startedHeaders.add(loop.headerLine());
             }
             frame.iterations.put(loop.headerLine(), count);
             if (count > 0) {
@@ -466,7 +483,10 @@ public final class TraceAnnotator {
             // first entry comes from before the loop; later ones from the while(...) line
             return previous == loop.conditionLine() || !loop.contains(previous);
         }
-        return previous == loop.headerLine();
+        // Back from the body through the header; or, for a for-each loop, through its closing brace:
+        // javac puts the iterator's hasNext() check under the brace's line, so there is no header stop.
+        boolean viaBrace = loop.endLine() > loop.bodyEnd() && previous == loop.endLine();
+        return previous == loop.headerLine() || viaBrace;
     }
 
     // ---------- helpers -----------------------------------------------------------------

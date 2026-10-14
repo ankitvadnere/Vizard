@@ -1,7 +1,7 @@
 // The Complexity tab: algorithms Vizard recognised, their textbook complexity, why they were
 // recognised, and the worst-case operation count for this input next to this run's live count.
 
-const METRIC_UNITS = { comparisons: "comparisons", loopIterations: "loop iterations" };
+const METRIC_UNITS = { comparisons: "comparisons", loopIterations: "loop iterations", edgesExamined: "checks" };
 
 export class ComplexityPanel {
     constructor(container, dot) {
@@ -33,7 +33,7 @@ export class ComplexityPanel {
                 paragraph("complexity-footnote",
                     "Vizard reports complexity only for algorithms it can identify from the structure of the code "
                     + "(sorting and searching; BST search, insertion and deletion; tree traversals; linked list "
-                    + "reversal). It does not guess the complexity of arbitrary code. The operation counts are "
+                    + "reversal; BFS, DFS and Dijkstra on graphs). It does not guess the complexity of arbitrary code. The operation counts are "
                     + "still exact for this run."));
         }
         for (const algorithm of algorithms) {
@@ -46,7 +46,8 @@ export class ComplexityPanel {
             this.container.append(paragraph("complexity-footnote",
                 "Complexities come from a catalogue of known algorithms, matched by code structure and adjusted "
                 + "for details Vizard can see (such as an early-exit flag). n is the length of the largest array "
-                + "the program used, or the number of nodes in its tree or list."));
+                + "the program used, or the number of nodes in its tree or list; V and E are the vertices and edges "
+                + "of its graph."));
         }
     }
 
@@ -94,8 +95,8 @@ export class ComplexityPanel {
         card.append(table);
         if (c.note) card.append(paragraph("algo-note", c.note));
 
-        if (algorithm.bound && input) {
-            card.append(this.#meter(algorithm.bound, input, truncated));
+        if (algorithm.bound && algorithm.bound.value != null && (input || graphSize(algorithm))) {
+            card.append(this.#meter(algorithm.bound, input, truncated, graphSize(algorithm)));
         }
         if (algorithm.measures?.length) {
             card.append(measureList(algorithm.measures));
@@ -117,17 +118,19 @@ export class ComplexityPanel {
     }
 
     /** "n = 4 (arr): worst case n(n−1)/2 = 6 comparisons" + a live bar for this run. */
-    #meter(bound, input, truncated) {
+    #meter(bound, input, truncated, graph) {
         const unit = METRIC_UNITS[bound.metric] ?? bound.metric;
         const box = document.createElement("div");
         box.className = "bound";
 
         const theory = document.createElement("p");
         theory.className = "bound-theory";
-        theory.append(`For n = ${input.n} (${input.name}): ${bound.description}, `);
+        const size = bound.metric === "edgesExamined" && graph ? graph : `n = ${input.n} (${input.name})`;
+        theory.append(`For ${size}: ${bound.description}, `);
         const formula = document.createElement("code");
         formula.textContent = `${bound.formula} = ${bound.value}`;
-        theory.append(formula, ` ${unit}${bound.scope === "per search" ? " per search" : ""}.`);
+        const scope = bound.scope === "per search" ? " per search" : bound.scope === "per traversal" ? " per traversal" : "";
+        theory.append(formula, ` ${unit}${scope}.`);
 
         const row = document.createElement("div");
         row.className = "bound-row";
@@ -150,6 +153,13 @@ export class ComplexityPanel {
         });
         return box;
     }
+}
+
+/** "V = 6, E = 7" from a graph algorithm's measures, or null. */
+function graphSize(algorithm) {
+    const v = algorithm.measures?.find((m) => m.label.startsWith("Vertices"));
+    const e = algorithm.measures?.find((m) => m.label.startsWith("Edges"));
+    return v && e ? `V = ${v.value}, E = ${e.value}` : null;
 }
 
 /** "Nodes n 7 · Height h 2 · ..." measured from this run. */

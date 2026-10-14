@@ -20,6 +20,9 @@ package com.vizard.api.dto.trace;
  * @param inserts        add / put / set on lists, maps, sets and deques
  * @param removes        removals from lists, maps, sets and deques
  * @param lookups        get / contains / containsKey / peek on any collection
+ * @param verticesVisited graph vertices visited (or settled, for Dijkstra) so far
+ * @param edgesExamined  iterations of a neighbour loop: one per edge looked at (per matrix cell for a matrix)
+ * @param relaxations    distance improvements, {@code dist[v] = dist[u] + w}
  */
 public record ExecutionStats(
         int steps,
@@ -36,6 +39,9 @@ public record ExecutionStats(
         int dequeues,
         int inserts,
         int removes,
-        int lookups
+        int lookups,
+        int verticesVisited,
+        int edgesExamined,
+        int relaxations
 ) {
 }

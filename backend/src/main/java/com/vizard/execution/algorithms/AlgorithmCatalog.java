@@ -5,6 +5,7 @@ import com.vizard.api.dto.analysis.ComplexityInfo;
 import com.vizard.api.dto.analysis.Measure;
 import com.vizard.api.dto.analysis.OperationBound;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -131,12 +132,97 @@ public final class AlgorithmCatalog {
                         ? List.of(new Measure("Nodes n", Integer.toString(facts.listNodes())))
                         : List.of();
             }
+            case BFS, DFS -> {
+                boolean matrix = d.has(GraphAlgorithms.MATRIX);
+                boolean bfs = d.algorithm() == Algorithm.BFS;
+                String space = bfs ? "the queue and the visited array hold at most V vertices"
+                        : d.has(Detection.RECURSIVE) ? "the recursion can be V calls deep, plus the visited array"
+                        : "the visited array, plus a stack that can hold up to one entry per edge examined";
+                complexity = matrix
+                        ? new ComplexityInfo("O(V²)", "O(V²)", "O(V²)", bfs || d.has(Detection.RECURSIVE) ? "O(V)" : "O(V²)",
+                        null, "Each vertex is processed once, and finding its neighbours means scanning its whole row of "
+                        + "the matrix: V cells, whatever its degree. V rows × V cells = O(V²), even for a sparse graph. "
+                        + "Space: " + space + ".")
+                        : new ComplexityInfo("O(V + E)", "O(V + E)", "O(V + E)",
+                        bfs || d.has(Detection.RECURSIVE) ? "O(V)" : "O(V + E)", null,
+                        "Each vertex is processed once (the visited marks see to that) and its adjacency list is "
+                                + "scanned once, so every edge is looked at once in a directed graph and twice (once "
+                                + "from each end) in an undirected one: O(V + E) in total. Space: " + space + ".");
+                bound = graphBound(matrix, facts);
+                measures = graphMeasures(facts, matrix ? "V²" : "V + E");
+            }
+            case DIJKSTRA -> {
+                boolean matrix = d.has(GraphAlgorithms.MATRIX);
+                if (d.has(GraphAlgorithms.HEAP)) {
+                    String time = matrix ? "O(V² + E log V)" : "O((V+E) log V)";
+                    complexity = new ComplexityInfo(time, time, time, "O(V + E)", null,
+                            "Every vertex is taken from the binary heap once and every edge can relax a distance and "
+                                    + "push a new entry; each heap operation costs O(log V) (log of up to E entries, "
+                                    + "and log E ≤ 2 log V)."
+                                    + (matrix ? " Scanning a whole matrix row per vertex adds V² on top." : "")
+                                    + " Outdated entries stay in the heap until polled, so it can hold O(E) entries."
+                                    + (d.has(GraphAlgorithms.SKIPS_STALE) ? ""
+                                    : " This version doesn't skip outdated entries, so a vertex may be processed "
+                                    + "again: still correct, but slower."));
+                    bound = d.has(GraphAlgorithms.SKIPS_STALE) ? graphBound(matrix, facts) : null;
+                    measures = graphMeasures(facts, matrix ? null : "(V + E)·log₂V");
+                } else {
+                    complexity = new ComplexityInfo("O(V²)", "O(V²)", "O(V²)", "O(V)", null,
+                            "Without a heap, finding the closest unfinished vertex scans all V distances, and that "
+                                    + "happens V times: O(V²). That is optimal for a dense graph (E ≈ V²); for a sparse "
+                                    + "graph a binary heap gives O((V + E) log V). Works only with non-negative weights.");
+                    bound = matrix ? graphBound(true, facts) : null;
+                    measures = graphMeasures(facts, "V²");
+                }
+            }
             default -> throw new IllegalStateException("Unknown algorithm " + d.algorithm());
         }
 
         Algorithm a = d.algorithm();
         return new AlgorithmMatch(a.id(), a.displayName(), a.category(), d.method(), d.line(), d.evidence(),
                 complexity, bound, measures);
+    }
+
+    /**
+     * Edges examined = iterations of the neighbour loop. For a list that is the total length of the
+     * adjacency lists (E directed, 2E undirected); for a matrix, V cells per processed vertex (V²).
+     */
+    private static OperationBound graphBound(boolean matrix, StructureFacts facts) {
+        Long value = null;
+        String formula;
+        if (matrix) {
+            formula = "V²";
+            value = facts.hasGraph() ? (long) facts.graphVertices() * facts.graphVertices() : null;
+        } else {
+            boolean directed = !facts.hasGraph() || facts.graphDirected();
+            formula = directed ? "E" : "2E";
+            value = facts.hasGraph() ? (long) facts.graphEdges() * (directed ? 1 : 2) : null;
+        }
+        return new OperationBound("edgesExamined",
+                matrix ? "matrix cells checked (neighbour-loop iterations) at most"
+                        : "edges examined (neighbour-loop iterations) at most",
+                formula, value, "per traversal");
+    }
+
+    /** V, E, the kind of graph, and the size of the main term for this run. */
+    private static List<Measure> graphMeasures(StructureFacts facts, String term) {
+        if (!facts.hasGraph()) {
+            return List.of();
+        }
+        int v = facts.graphVertices();
+        int e = facts.graphEdges();
+        List<Measure> measures = new ArrayList<>();
+        measures.add(new Measure("Vertices V", Integer.toString(v)));
+        measures.add(new Measure("Edges E" + (facts.graphDirected() ? "" : " (undirected)"), Integer.toString(e)));
+        if ("V + E".equals(term)) {
+            measures.add(new Measure("V + E", Integer.toString(v + e)));
+        } else if ("V²".equals(term)) {
+            measures.add(new Measure("V²", Integer.toString(v * v)));
+        } else if (term != null) {
+            double log = v <= 1 ? 0 : Math.log(v) / Math.log(2);
+            measures.add(new Measure(term, "≈ " + Math.round((v + e) * log)));
+        }
+        return measures;
     }
 
     /** n, the measured height h, and the height the same n would have if balanced. */
