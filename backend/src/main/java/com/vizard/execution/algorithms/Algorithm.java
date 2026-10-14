@@ -19,7 +19,12 @@ public enum Algorithm {
     LIST_REVERSAL("list-reversal", "Linked list reversal", "Linked lists"),
     BFS("bfs", "Breadth-first search (BFS)", "Graphs"),
     DFS("dfs", "Depth-first search (DFS)", "Graphs"),
-    DIJKSTRA("dijkstra", "Dijkstra's shortest paths", "Graphs");
+    DIJKSTRA("dijkstra", "Dijkstra's shortest paths", "Graphs"),
+    N_QUEENS("n-queens", "N-Queens (backtracking)", "Backtracking"),
+    PERMUTATIONS("permutations", "Permutations (backtracking)", "Backtracking"),
+    SUBSETS("subsets", "Subsets / subset sum (backtracking)", "Backtracking"),
+    GRAPH_COLORING("graph-coloring", "Graph colouring (backtracking)", "Backtracking"),
+    BACKTRACKING("backtracking", "Backtracking search", "Backtracking");
 
     private final String id;
     private final String displayName;

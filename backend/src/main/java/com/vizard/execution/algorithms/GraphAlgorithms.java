@@ -145,10 +145,14 @@ final class GraphAlgorithms {
         return false;
     }
 
-    /** Methods a recognised graph algorithm calls (e.g. minDistance()) are part of it, not reported alone. */
+    /**
+     * Methods a recognised graph or backtracking algorithm calls (minDistance() in Dijkstra, isSafe() in
+     * N-Queens) are part of it, not reported alone.
+     */
     static boolean isPartOf(Detection helper, List<Detection> found, CompilationUnit cu) {
         for (Detection d : found) {
-            if (d == helper || !d.algorithm().category().equals("Graphs")) {
+            boolean whole = d.algorithm().category().equals("Graphs") || d.algorithm().category().equals("Backtracking");
+            if (d == helper || !whole) {
                 continue;
             }
             for (MethodDeclaration m : cu.findAll(MethodDeclaration.class)) {

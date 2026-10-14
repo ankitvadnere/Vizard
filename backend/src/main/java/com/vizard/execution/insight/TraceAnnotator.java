@@ -1,5 +1,6 @@
 package com.vizard.execution.insight;
 
+import com.vizard.api.dto.analysis.SearchTree;
 import com.vizard.api.dto.trace.ArrayAccessInsight;
 import com.vizard.api.dto.trace.ArrayChangeInsight;
 import com.vizard.api.dto.trace.ConditionInsight;
@@ -48,12 +49,21 @@ public final class TraceAnnotator {
     private TraceAnnotator() {
     }
 
+    /** The annotated steps and the state-space trees of the run's backtracking searches. */
+    public record Annotated(List<TraceStep> steps, List<SearchTree> searchTrees) {
+    }
+
     public static List<TraceStep> annotate(List<TraceStep> steps, CodeModel model) {
+        return annotateAll(steps, model).steps();
+    }
+
+    public static Annotated annotateAll(List<TraceStep> steps, CodeModel model) {
         int[] next = nextStepInSameCall(steps);
         Deque<FrameLoops> frames = new ArrayDeque<>();
         List<TraceStep> out = new ArrayList<>(steps.size());
         StatsCounter stats = new StatsCounter();
         GraphTracker graphs = new GraphTracker(steps, model.graphs());
+        SearchTracker searches = new SearchTracker(steps, model.searches());
 
         for (int k = 0; k < steps.size(); k++) {
             TraceStep step = steps.get(k);
@@ -119,9 +129,16 @@ public final class TraceAnnotator {
                     stats.edgesExamined++;
                 }
             }
+            if (searches.active()) {
+                searches.track(k, insight, next[k]);
+                stats.nodesExplored += searches.newNodes;
+                stats.branchesPruned += searches.newPruned;
+                stats.solutionsFound += searches.newSolutions;
+                stats.backtracks += searches.newBacktracks;
+            }
             out.add(step.withAnnotations(insight, stats.snapshot(k, step)));
         }
-        return out;
+        return new Annotated(out, searches.trees());
     }
 
     /**
@@ -164,6 +181,10 @@ public final class TraceAnnotator {
         int verticesVisited;
         int edgesExamined;
         int relaxations;
+        int nodesExplored;
+        int branchesPruned;
+        int solutionsFound;
+        int backtracks;
         final Map<String, Integer> structureOps = new HashMap<>();
 
         void count(List<TraceStep> steps, int k, StepInsight insight, int iterationsStarted, boolean comparesValues) {
@@ -226,7 +247,7 @@ public final class TraceAnnotator {
             return new ExecutionStats(k + 1, comparisons, swaps, reads, writes, calls,
                     Math.max(maxDepth, step.depth()), iterations, op("push"), op("pop"), op("enqueue"),
                     op("dequeue"), op("insert"), op("remove"), op("lookup"), verticesVisited, edgesExamined,
-                    relaxations);
+                    relaxations, nodesExplored, branchesPruned, solutionsFound, backtracks);
         }
 
         private int op(String kind) {

@@ -106,7 +106,7 @@ class AlgorithmDetectorTest {
     }
 
     @Test
-    void theSafetyCheckInsideNQueensIsNotMistakenForLinearSearch() {
+    void nQueensIsRecognisedAndItsSafetyCheckIsNotMistakenForLinearSearch() {
         // A 2D-board N-Queens: isSafe() scans a row and returns false on a queen.
         assertThat(detect("""
                 class Main {
@@ -129,7 +129,7 @@ class AlgorithmDetectorTest {
                         return false;
                     }
                 }
-                """)).isEmpty();
+                """)).extracting(d -> d.algorithm()).containsExactly(Algorithm.N_QUEENS);
 
         // A 1D N-Queens (queens[row] = column) where the check is inlined as a helper call.
         assertThat(detect("""
@@ -153,7 +153,7 @@ class AlgorithmDetectorTest {
                         }
                     }
                 }
-                """)).isEmpty();
+                """)).extracting(d -> d.algorithm()).containsExactly(Algorithm.N_QUEENS);
     }
 
     @Test

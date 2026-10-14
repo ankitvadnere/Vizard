@@ -7,6 +7,7 @@ import com.vizard.api.dto.analysis.InputSize;
 import com.vizard.api.dto.analysis.OperationCost;
 import com.vizard.api.dto.analysis.StructureUse;
 import com.vizard.api.dto.analysis.ProgramAnalysis;
+import com.vizard.api.dto.analysis.SearchTree;
 import com.vizard.api.dto.trace.FrameSnapshot;
 import com.vizard.api.dto.trace.GraphInsight;
 import com.vizard.api.dto.trace.HeapObjectSnapshot;
@@ -78,36 +79,36 @@ public class TraceRunner {
 
                 ExecutionResponse execution = classifier.classify(result, program.sourceFileName(),
                         program.compileTimeMs());
-                List<TraceStep> steps = annotate(StructureRoles.apply(
+                TraceAnnotator.Annotated annotated = annotate(StructureRoles.apply(
                         OutputOffsets.toCharacterOffsets(recording.steps(), result.stdout())), program.codeModel());
-                return new TraceResponse(execution, steps, recording.truncated(), props.maxTraceSteps(),
-                        analyse(program, steps));
+                return new TraceResponse(execution, annotated.steps(), recording.truncated(), props.maxTraceSteps(),
+                        analyse(program, annotated.steps(), annotated.searchTrees()));
             }
         }
     }
 
     /** Adds conditions, array accesses, swaps and loop counts. Never fails the trace. */
-    private static List<TraceStep> annotate(List<TraceStep> steps, CodeModel model) {
+    private static TraceAnnotator.Annotated annotate(List<TraceStep> steps, CodeModel model) {
         if (model == null) {
-            return steps;
+            return new TraceAnnotator.Annotated(steps, List.of());
         }
         try {
-            return TraceAnnotator.annotate(steps, model);
+            return TraceAnnotator.annotateAll(steps, model);
         } catch (RuntimeException e) {
             log.warn("Could not annotate the trace; steps will have no insights", e);
-            return steps;
+            return new TraceAnnotator.Annotated(steps, List.of());
         }
     }
 
     /** Recognised algorithms with their complexity, with the bounds evaluated for this run's n. */
-    private static ProgramAnalysis analyse(PreparedProgram program, List<TraceStep> steps) {
+    private static ProgramAnalysis analyse(PreparedProgram program, List<TraceStep> steps, List<SearchTree> trees) {
         InputSize input = inputSize(steps);
         Integer n = input == null ? null : input.n();
-        StructureFacts facts = graphFacts(structureFacts(steps), steps);
+        StructureFacts facts = searchFacts(graphFacts(structureFacts(steps), steps), trees);
         List<AlgorithmMatch> matches = program.algorithms().stream()
                 .map(d -> AlgorithmCatalog.describe(d, n, facts))
                 .toList();
-        return new ProgramAnalysis(matches, input, structureUses(steps));
+        return new ProgramAnalysis(matches, input, structureUses(steps), trees);
     }
 
     /**
@@ -238,6 +239,21 @@ public class TraceRunner {
             }
         }
         return new StructureFacts(bestTree, bestHeight, bestList);
+    }
+
+    /** Depth, branching and nodes explored of the largest search tree. */
+    static StructureFacts searchFacts(StructureFacts facts, List<SearchTree> trees) {
+        SearchTree best = null;
+        for (SearchTree t : trees) {
+            if (best == null || t.nodes().size() > best.nodes().size()) {
+                best = t;
+            }
+        }
+        if (best == null) {
+            return facts;
+        }
+        int explored = (int) best.nodes().stream().filter(x -> !x.kind().equals("rejected")).count();
+        return facts.withSearch(best.depthBound(), best.branching(), explored);
     }
 
     /** V and E of the largest graph any step drew (the graph as complete as it got). */

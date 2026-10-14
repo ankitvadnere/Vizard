@@ -23,6 +23,10 @@ package com.vizard.api.dto.trace;
  * @param verticesVisited graph vertices visited (or settled, for Dijkstra) so far
  * @param edgesExamined  iterations of a neighbour loop: one per edge looked at (per matrix cell for a matrix)
  * @param relaxations    distance improvements, {@code dist[v] = dist[u] + w}
+ * @param nodesExplored  calls of a backtracking method: nodes of the state-space tree visited
+ * @param branchesPruned choices rejected by the check before a call, plus calls stopped by a bound check
+ * @param solutionsFound nodes where a solution was recorded (printed, counted, stored or returned true)
+ * @param backtracks     returns from a call to the level above, where the choice is undone
  */
 public record ExecutionStats(
         int steps,
@@ -42,6 +46,10 @@ public record ExecutionStats(
         int lookups,
         int verticesVisited,
         int edgesExamined,
-        int relaxations
+        int relaxations,
+        int nodesExplored,
+        int branchesPruned,
+        int solutionsFound,
+        int backtracks
 ) {
 }

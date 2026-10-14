@@ -24,5 +24,9 @@
   {"id": "dfs-recursive", "title": "Depth-first search (recursive)", "group": "Graphs", "algorithms": ["dfs"]},
   {"id": "dfs-iterative", "title": "Depth-first search (with a stack)", "group": "Graphs", "algorithms": ["dfs"]},
   {"id": "dijkstra", "title": "Dijkstra (priority queue)", "group": "Graphs", "algorithms": ["dijkstra"]},
-  {"id": "dijkstra-matrix", "title": "Dijkstra (adjacency matrix, no heap)", "group": "Graphs", "algorithms": ["dijkstra"]}
+  {"id": "dijkstra-matrix", "title": "Dijkstra (adjacency matrix, no heap)", "group": "Graphs", "algorithms": ["dijkstra"]},
+  {"id": "n-queens", "title": "N-Queens (4 × 4)", "group": "Backtracking", "algorithms": ["n-queens"]},
+  {"id": "permutations", "title": "Permutations of {1, 2, 3}", "group": "Backtracking", "algorithms": ["permutations"]},
+  {"id": "subset-sum", "title": "Subset sum (take or leave)", "group": "Backtracking", "algorithms": ["subsets"]},
+  {"id": "graph-coloring", "title": "Graph colouring (m = 3)", "group": "Backtracking", "algorithms": ["graph-coloring"]}
 ]

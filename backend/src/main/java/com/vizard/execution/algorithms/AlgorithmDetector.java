@@ -58,6 +58,7 @@ public final class AlgorithmDetector {
                 continue;
             }
             Optional<Detection> d = GraphAlgorithms.detect(m, cu)
+                    .or(() -> BacktrackAlgorithms.detect(m, cu))
                     .or(() -> StructureAlgorithms.detect(m, nodeClasses))
                     .or(() -> mergeSort(m, methodsByName))
                     .or(() -> quickSort(m, methodsByName))
@@ -70,7 +71,7 @@ public final class AlgorithmDetector {
         }
         found.removeIf(d -> isHelperOfUnknownRecursion(d, cu, found));
         List<Detection> recognised = List.copyOf(found);
-        found.removeIf(d -> GraphAlgorithms.isPartOf(d, recognised, cu)); // e.g. minDistance() inside Dijkstra
+        found.removeIf(d -> GraphAlgorithms.isPartOf(d, recognised, cu)); // e.g. minDistance() inside Dijkstra, isSafe() in N-Queens
         found.sort((a, b) -> Integer.compare(a.line(), b.line()));
         return found;
     }

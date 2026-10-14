@@ -99,7 +99,8 @@ public final class CodeModelBuilder {
             methods.add(new MethodSite(name, line(m), endLine(m), pointers, ranges(m, pointers)));
         }
 
-        return new CodeModel(conditions, loops, accesses, methods, GraphModelBuilder.build(cu));
+        return new CodeModel(conditions, loops, accesses, methods, GraphModelBuilder.build(cu),
+                BacktrackModelBuilder.build(cu));
     }
 
     // ---------- pointer variables -------------------------------------------------------

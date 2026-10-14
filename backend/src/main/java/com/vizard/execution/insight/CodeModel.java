@@ -11,22 +11,24 @@ import java.util.Map;
  * @param accesses    array accesses keyed by line
  * @param methods     methods and constructors with their line ranges and pointer variables
  * @param graphs      graph traversals: one per loop over a vertex's neighbours
+ * @param searches    backtracking searches: one per recursive method with the choose → recurse → undo shape
  */
 public record CodeModel(
         Map<Integer, List<ConditionSite>> conditions,
         List<LoopSite> loops,
         Map<Integer, List<ArrayAccessSite>> accesses,
         List<MethodSite> methods,
-        List<GraphSpec> graphs
+        List<GraphSpec> graphs,
+        List<SearchSpec> searches
 ) {
 
     public CodeModel(Map<Integer, List<ConditionSite>> conditions, List<LoopSite> loops,
                      Map<Integer, List<ArrayAccessSite>> accesses, List<MethodSite> methods) {
-        this(conditions, loops, accesses, methods, List.of());
+        this(conditions, loops, accesses, methods, List.of(), List.of());
     }
 
     public static CodeModel empty() {
-        return new CodeModel(Map.of(), List.of(), Map.of(), List.of(), List.of());
+        return new CodeModel(Map.of(), List.of(), Map.of(), List.of(), List.of(), List.of());
     }
 
     /**
@@ -136,6 +138,46 @@ public record CodeModel(
         boolean bodyContains(int line) {
             return line >= bodyStart && line <= bodyEnd;
         }
+
+        boolean methodContains(int line) {
+            return line >= methodStart && line <= methodEnd;
+        }
+    }
+
+    /**
+     * A backtracking search, found by {@link BacktrackModelBuilder}: a recursive method that makes a
+     * choice, recurses, and undoes the choice. Each call is a node of the state-space tree.
+     *
+     * @param kind           "loop": one call per choice, inside a for loop over the choices;
+     *                       "binary": two calls, include / exclude (no loop)
+     * @param problem        "n-queens", "permutations", "subsets", "graph-coloring" or "backtracking"
+     * @param depthParam     the parameter that grows by one per level (row, k, i), or null (e.g. path.size())
+     * @param goalLine       line of the goal test ({@code if (row == n) ...}), 0 if none
+     * @param goalBound      the side of the goal test that gives the depth of the tree (n), or null
+     * @param cutLines       bound checks that end a call early ({@code if (sum > target) return;})
+     * @param loopLine       header line of the choice loop, 0 for "binary"
+     * @param choiceVar      the loop variable (col, c, i), null for "binary"
+     * @param choiceFrom     its first value
+     * @param choiceTo       its bound, {@code inclusive} for {@code <=}
+     * @param rejectIfFalse  lines of ifs around a recursive call: false = that choice is rejected (pruned)
+     * @param rejectIfTrue   lines of {@code if (...) continue;} before the call: true = choice rejected
+     * @param callLines      lines with a recursive call
+     * @param item           the element a branch stands for: {@code a[i]} for take/leave, {@code nums[i]} in
+     *                       {@code path.add(nums[i])}; null if the choice is just the loop variable
+     * @param includeLine    "binary": line of the call that includes the item
+     * @param undoLines      statements after a call that undo the choice
+     * @param assignment     the array the choice is written to (board, queens, color), or null
+     * @param assignmentShape "matrix" (board[depth][choice] = 1), "matrix-transposed" (board[choice][depth]),
+     *                       "vector" (color[v] = c), or null
+     * @param stateNames     variables the choices change and undo (board, path, used): changes to them are
+     *                       the search moving, not a solution being recorded
+     */
+    public record SearchSpec(String method, int methodStart, int methodEnd, String kind, String problem,
+                             String depthParam, int goalLine, Expr goalBound, List<Integer> cutLines,
+                             int loopLine, String choiceVar, Expr choiceFrom, Expr choiceTo, boolean inclusive,
+                             List<Integer> rejectIfFalse, List<Integer> rejectIfTrue, List<Integer> callLines,
+                             Expr item, int includeLine, List<Integer> undoLines, String assignment,
+                             String assignmentShape, List<String> stateNames) {
 
         boolean methodContains(int line) {
             return line >= methodStart && line <= methodEnd;

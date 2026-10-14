@@ -175,6 +175,12 @@ public final class AlgorithmCatalog {
                     measures = graphMeasures(facts, "V²");
                 }
             }
+            case N_QUEENS, PERMUTATIONS, SUBSETS, GRAPH_COLORING, BACKTRACKING -> {
+                SearchCosts costs = SearchCosts.of(d, facts);
+                complexity = costs.complexity();
+                bound = costs.bound();
+                measures = costs.measures();
+            }
             default -> throw new IllegalStateException("Unknown algorithm " + d.algorithm());
         }
 
@@ -201,7 +207,8 @@ public final class AlgorithmCatalog {
         return new OperationBound("edgesExamined",
                 matrix ? "matrix cells checked (neighbour-loop iterations) at most"
                         : "edges examined (neighbour-loop iterations) at most",
-                formula, value, "per traversal");
+                formula, value, "per traversal",
+                facts.hasGraph() ? "V = " + facts.graphVertices() + ", E = " + facts.graphEdges() : null);
     }
 
     /** V, E, the kind of graph, and the size of the main term for this run. */
