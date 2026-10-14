@@ -1,7 +1,9 @@
 // The Complexity tab: algorithms Vizard recognised, their textbook complexity, why they were
 // recognised, and the worst-case operation count for this input next to this run's live count.
 
-const METRIC_UNITS = { comparisons: "comparisons", loopIterations: "loop iterations", edgesExamined: "checks" };
+const METRIC_UNITS = {
+    comparisons: "comparisons", loopIterations: "loop iterations", edgesExamined: "checks", nodesExplored: "nodes",
+};
 
 export class ComplexityPanel {
     constructor(container, dot) {
@@ -33,7 +35,8 @@ export class ComplexityPanel {
                 paragraph("complexity-footnote",
                     "Vizard reports complexity only for algorithms it can identify from the structure of the code "
                     + "(sorting and searching; BST search, insertion and deletion; tree traversals; linked list "
-                    + "reversal; BFS, DFS and Dijkstra on graphs). It does not guess the complexity of arbitrary code. The operation counts are "
+                    + "reversal; BFS, DFS and Dijkstra on graphs; N-Queens, permutations, subsets and graph colouring by "
+                    + "backtracking). It does not guess the complexity of arbitrary code. The operation counts are "
                     + "still exact for this run."));
         }
         for (const algorithm of algorithms) {
@@ -95,7 +98,7 @@ export class ComplexityPanel {
         card.append(table);
         if (c.note) card.append(paragraph("algo-note", c.note));
 
-        if (algorithm.bound && algorithm.bound.value != null && (input || graphSize(algorithm))) {
+        if (algorithm.bound && algorithm.bound.value != null && (input || algorithm.bound.size || graphSize(algorithm))) {
             card.append(this.#meter(algorithm.bound, input, truncated, graphSize(algorithm)));
         }
         if (algorithm.measures?.length) {
@@ -125,11 +128,12 @@ export class ComplexityPanel {
 
         const theory = document.createElement("p");
         theory.className = "bound-theory";
-        const size = bound.metric === "edgesExamined" && graph ? graph : `n = ${input.n} (${input.name})`;
+        const size = bound.size ?? (bound.metric === "edgesExamined" && graph ? graph : `n = ${input.n} (${input.name})`);
         theory.append(`For ${size}: ${bound.description}, `);
         const formula = document.createElement("code");
         formula.textContent = `${bound.formula} = ${bound.value}`;
-        const scope = bound.scope === "per search" ? " per search" : bound.scope === "per traversal" ? " per traversal" : "";
+        const scope = bound.metric === "nodesExplored" ? ""
+            : bound.scope === "per search" ? " per search" : bound.scope === "per traversal" ? " per traversal" : "";
         theory.append(formula, ` ${unit}${scope}.`);
 
         const row = document.createElement("div");

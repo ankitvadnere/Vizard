@@ -20,6 +20,7 @@ import { VariableVisualizer } from "./visualizations/VariableVisualizer.js";
 import { VisualizationPanel } from "./visualizations/VisualizationPanel.js";
 import { ComplexityPanel } from "./visualizations/ComplexityPanel.js";
 import { createTabs } from "./tabs.js";
+import { initFullscreen } from "./fullscreen.js";
 
 const runButton = document.getElementById("run-button");
 const traceButton = document.getElementById("trace-button");
@@ -32,9 +33,15 @@ const playbackBar = new PlaybackBar(playback, { onExit: () => exitTrace() });
 const variables = new VariableVisualizer(
     document.getElementById("variables"), document.getElementById("frame-label"));
 const visualization = new VisualizationPanel();
+visualization.onJump = (index) => {
+    playback.pause();
+    playback.goTo(index);
+};
 const complexity = new ComplexityPanel(
     document.getElementById("complexity"), document.getElementById("complexity-dot"));
 const leftTabs = createTabs(document.querySelector(".variables-pane"));
+initFullscreen();
+const stepCode = document.getElementById("step-code");
 
 const FALLBACK_CODE = `public class Main {
     public static void main(String[] args) {
@@ -82,7 +89,7 @@ async function stepThrough() {
 
         lastRenderedIndex = -1;
         complexity.load(response.analysis, response.truncated);
-        visualization.load(response.steps);
+        visualization.load(response.steps, response.analysis);
         playback.load(response.steps);
         playbackBar.show();
         renderStep();
@@ -95,6 +102,10 @@ function renderStep() {
 
     const kind = step.event === "EXCEPTION" ? "error" : step.event === "RETURN" ? "return" : "next";
     highlightExecutionLine(step.line, kind);
+    // Shown in full-screen mode, where the editor is hidden: the line being run.
+    const source = getCode().split("\n")[step.line - 1];
+    stepCode.textContent = source ? `${step.line}:  ${source.trim()}` : "";
+    stepCode.hidden = !source;
     variables.render(step, playback.previous);
     visualization.render(step, {
         animate: playback.index === lastRenderedIndex + 1 && lastRenderedIndex >= 0,

@@ -4,6 +4,8 @@ import { ArrayVisualizer } from "./ArrayVisualizer.js";
 import { InsightStrip } from "./InsightStrip.js";
 import { CallStackVisualizer } from "./CallStackVisualizer.js";
 import { GraphVisualizer } from "./GraphVisualizer.js";
+import { SearchTreeVisualizer } from "./SearchTreeVisualizer.js";
+import { assignmentValues, drawBoard, searchStarted } from "./BoardVisualizer.js";
 import { StatsBar } from "./StatsBar.js";
 import { StructureVisualizer } from "./StructureVisualizer.js";
 
@@ -13,6 +15,11 @@ export class VisualizationPanel {
         this.arraysEl = document.getElementById("arrays");
         this.graphEl = document.getElementById("graph");
         this.graph = new GraphVisualizer(this.graphEl);
+        this.searchEl = document.getElementById("search");
+        this.search = new SearchTreeVisualizer(this.searchEl, (index) => this.onJump?.(index));
+        this.trees = [];
+        /** Set by the page: jump playback to a step (clicking a node of the state-space tree). */
+        this.onJump = null;
         this.legend = document.getElementById("viz-legend");
         this.insights = new InsightStrip(document.getElementById("insights"));
         this.arrays = new ArrayVisualizer(this.arraysEl);
@@ -27,6 +34,7 @@ export class VisualizationPanel {
         this.insights.clear();
         this.arraysEl.replaceChildren(note("viz-empty", message));
         this.graphEl.replaceChildren();
+        this.searchEl.replaceChildren();
         this.structuresEl.replaceChildren();
         this.callStack.showEmpty();
         this.stats.hide();
@@ -41,18 +49,34 @@ export class VisualizationPanel {
      * Called once per trace: the stats bar shows only the counters this run uses (from the last step),
      * and each graph gets one layout for the whole trace.
      */
-    load(steps) {
+    load(steps, analysis) {
         this.stats.configure(steps.at(-1)?.stats ?? null);
         this.graph.load(steps);
+        this.search.load(analysis);
+        this.trees = analysis?.searchTrees ?? [];
     }
 
     render(step, { animate = false, previous = null } = {}) {
         this.label.textContent = `line ${step.line}`;
         this.insights.render(step);
-        const graphs = this.graph.render(step, previous);
+        const searches = this.search.render(step);
+        let boards = 0;
+        let paint = null;
+        for (const tree of this.trees) {
+            if (!searchStarted(tree, step)) continue;
+            if (tree.problem === "n-queens" && tree.assignmentShape) {
+                const board = drawBoard(tree, step);
+                if (board) {
+                    this.searchEl.append(board);
+                    boards++;
+                }
+            }
+            if (tree.problem === "graph-coloring") paint = assignmentValues(tree, step);
+        }
+        const graphs = this.graph.render(step, previous, paint);
         const arrays = this.arrays.render(step, { animate });
         const structures = this.structures.render(step, previous);
-        if (arrays + structures + graphs === 0) {
+        if (arrays + structures + graphs + searches + boards === 0) {
             this.arraysEl.append(note("viz-note", "No arrays or data structures in this method."));
         }
         this.legend.hidden = arrays === 0;

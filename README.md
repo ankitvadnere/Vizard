@@ -3,10 +3,11 @@
 Interactive Java code execution, step-by-step debugging and algorithm visualization, built as a
 Design and Analysis of Algorithms course project.
 
-> Status: **Milestone 6** — step through Java forwards and backwards and *see* it run: arrays, pointers,
+> Status: **Milestone 7** — step through Java forwards and backwards and *see* it run: arrays, pointers,
 > conditions and loops; stacks, queues, priority queues, maps and sets; your own linked lists and binary
-> trees; graphs with BFS, DFS and Dijkstra traversals. Live operation counts, and complexity analysis for
-> the sorting, searching, tree, list and graph algorithms taught in DAA.
+> trees; graphs with BFS, DFS and Dijkstra traversals; backtracking as a growing state-space tree.
+> Live operation counts, and complexity analysis for the sorting, searching, tree, list, graph and
+> backtracking algorithms taught in DAA.
 
 ## Screenshots
 
@@ -53,6 +54,21 @@ amber; green edges form the shortest-path tree. The Complexity tab compares 2E w
 Dijkstra on an adjacency matrix: every cell of the processed row is checked, so the bound is V².
 
 ![Dijkstra on a matrix](docs/screenshots/dijkstra-matrix.png)
+
+N-Queens as it finds its first solution: the state-space tree (amber = the path of running calls,
+red squares = columns the safety check rejected, dashed = dead ends, green ★ = solution) next to the
+board, where the square being tried is outlined and attacked squares are shaded.
+
+![N-Queens](docs/screenshots/n-queens.png)
+
+Subset sum: each level takes (`+3`) or leaves (`−3`) one element; red dashed calls were cut by
+`if (sum > target) return;`. The Complexity tab compares the 27 calls made with the 31 of the full tree.
+
+![Subset sum](docs/screenshots/subset-sum.png)
+
+Permutations: every leaf is an ordering; the `used[]` check rejects elements already taken.
+
+![Permutations](docs/screenshots/permutations.png)
 
 ## How it works
 
@@ -131,6 +147,10 @@ Every step carries running totals up to that step, so stepping back rewinds them
 | Vertices visited | graph vertices visited so far (settled, for Dijkstra) |
 | Edges examined | iterations of the neighbour loop: one per edge looked at, one per cell for a matrix |
 | Relaxations | distance improvements `dist[v] = dist[u] + w` |
+| Nodes explored | calls of a backtracking method (nodes of the state-space tree) |
+| Pruned | choices rejected by the check, plus calls cut by a bound check |
+| Solutions | nodes where a solution was recorded |
+| Backtracks | returns from a call to the level above, where the choice is undone |
 
 Comparisons also count conditions that compare a node's value field, such as `key < root.key` in a BST;
 pointer checks like `root.left == null` are not comparisons. Only the counters a program uses are shown.
@@ -239,6 +259,70 @@ it, not reported on its own.
 on every offer and poll. Those calls come from inside the JDK, not from the program's own control
 flow, so the tracer lets them run without stopping (likewise `compareTo` during `Collections.sort`).
 
+### How backtracking is recognised and drawn
+
+**The shape.** `BacktrackModelBuilder` looks for a recursive method that goes **one level deeper** per
+call and has a **goal test** at that depth:
+
+```java
+static boolean solve(int[][] board, int row) {
+    if (row == N) return true;                       // goal test
+    for (int col = 0; col < N; col++) {              // one branch per choice
+        if (isSafe(board, row, col)) {               // check: a false here prunes the branch
+            board[row][col] = 1;                     // choose
+            if (solve(board, row + 1)) return true;  // explore one level deeper
+            board[row][col] = 0;                     // undo = backtrack
+        }
+    }
+    return false;
+}
+```
+
+or, without a loop, two calls that take and leave one element (`sub(i + 1, sum + a[i])`,
+`sub(i + 1, sum)`). "One level deeper" means every recursive call passes `row + 1` (or `i + 1` of the
+choice loop, for combinations); the depth can also be implicit, as in `path.size() == nums.length`.
+That is what separates a search from merge sort (`lo..mid`, `mid+1..hi`), Fibonacci (`n − 1`, `n − 2`),
+Towers of Hanoi, tree traversals and graph DFS (whose call sits in a loop over neighbours).
+
+**The problem**, which decides the size of the tree, is read from what the choice does:
+
+| Problem | Recognised by | Time | Full tree (no pruning) |
+|---|---|---|---|
+| N-Queens | a queen on `board[row][col]`, or `queens[row] = col` checked along diagonals (`Math.abs`, `row + c` / `row − c` arrays) | O(n!) | 1 + n + … + nⁿ |
+| Permutations | any element not used yet (`!used[i]`, `contains`), or swap / recurse / swap back | O(n·n!) | Σ n!/(n−k)! |
+| Subsets / subset sum | take / leave each element, or extend a combination with a later one | O(2ⁿ) | 2ⁿ⁺¹ − 1 |
+| Graph colouring | `color[v] = c`, checked against row `v` of the adjacency matrix | O(mⁿ) | 1 + m + … + mⁿ |
+| Anything else with the shape | | O(bᵈ) | 1 + b + … + bᵈ |
+
+n (the depth) comes from the goal test and m or b from the choice loop's range, evaluated at the first
+call of this run. The Complexity tab shows the nodes explored against the full tree.
+
+**The tree** (`SearchTracker`) is built from the real calls: a node per call, its parent the call it
+came from, labelled with the choice (the loop variable, the element it picks such as `nums[i]`, or
+`+x` / `−x` for take / leave).
+
+| Node | Meaning | How Vizard knows |
+|---|---|---|
+| Amber | the call running now, and the path to it | still on the call stack |
+| Red square | a choice the check rejected; never called | the check around the recursive call was false (shown once the check has returned) |
+| Red dashed | a call cut short | a bound check such as `if (sum > target) return;` was true |
+| Green ★ | a solution | while it was the deepest call the program printed, counted (`count++`), stored a result, or the leaf returned `true`. Changes to the search's own state (board, path, used) don't count |
+| Dashed grey | a dead end | a leaf that is none of the above |
+
+The whole tree is sent once (`analysis.searchTrees`); every node carries the step it appears at, the
+last step its call ran and the step its outcome is known, so the browser draws the tree as it was at
+any step, and clicking a node jumps to its call. For N-Queens the board is drawn from the program's
+own array; for graph colouring the graph's vertices are painted with `color[v]`.
+
+**Full screen and a quieter panel.** The Full screen button (or F) gives the Visualization panel
+the whole screen for big graphs, trees and boards; the step controls move into it and show the line
+being run as text. Esc leaves. The operation counters sit in a collapsed "Operation counts" section
+under the visualization (it remembers whether you opened it).
+
+**Step over / step out.** Backtracking traces are long, so two playback controls skip whole calls:
+*step over* (Shift+→) runs the calls made on the current line without stopping, and *step out*
+(Shift+↑) finishes the current call and stops back in its caller.
+
 ### How a condition's result is decided
 
 For `if (arr[j] > arr[j + 1])` Vizard shows `5 > 2` and `true`. The values come from a small
@@ -271,18 +355,21 @@ vizard/
 │       │       ├── trace/          JdiTraceSession, HeapReader, CollectionReader, CollectionCalls,
 │       │       │                   SameLineLoops, TraceRunner, ...
 │       │       ├── insight/        CodeModelBuilder, CodeModel, Expr, ExpressionEvaluator,
-│       │       │                   TraceAnnotator, StructureRoles, GraphModelBuilder, GraphTracker
+│       │       │                   TraceAnnotator, StructureRoles, GraphModelBuilder, GraphTracker,
+│       │       │                   BacktrackModelBuilder, SearchTracker
 │       │       └── algorithms/     AlgorithmDetector, StructureAlgorithms, GraphAlgorithms,
-│       │                           AlgorithmCatalog, StructureCosts, StructureFacts, Algorithm, Detection
+│       │                           BacktrackAlgorithms, SearchCosts, AlgorithmCatalog, StructureCosts,
+│       │                           StructureFacts, Algorithm, Detection
 │       ├── main/java/com/vizard/examples/   ExampleCatalog
 │       ├── main/resources/examples/         index.json + one .java file per example
 │       ├── main/resources/application.properties
 │       └── test/java/com/vizard/   execution/ExecutionServiceTest, TraceServiceTest, InsightTest,
 │                                   StatisticsTest, CollectionsTest, StructureStatisticsTest,
-│                                   GraphTraceTest, insight/CodeModelBuilderTest,
-│                                   insight/GraphModelBuilderTest, trace/NodeShapeTest,
-│                                   algorithms/AlgorithmDetectorTest, StructureAlgorithmsTest,
-│                                   GraphAlgorithmsTest, examples/ExamplesTest
+│                                   GraphTraceTest, SearchTraceTest, insight/CodeModelBuilderTest,
+│                                   insight/GraphModelBuilderTest, BacktrackModelBuilderTest,
+│                                   trace/NodeShapeTest, algorithms/AlgorithmDetectorTest,
+│                                   StructureAlgorithmsTest, GraphAlgorithmsTest,
+│                                   BacktrackAlgorithmsTest, examples/ExamplesTest
 └── frontend/                       Plain HTML/CSS/JS, served by the backend
     ├── index.html
     ├── css/styles.css
@@ -291,7 +378,8 @@ vizard/
         ├── playback/        PlaybackController, PlaybackBar, describeStep
         └── visualizations/  VisualizationPanel, ArrayVisualizer (SVG), StructureVisualizer,
                              StackVisualizer, QueueVisualizer, HeapVisualizer, MapVisualizer,
-                             LinkedListVisualizer, TreeVisualizer, GraphVisualizer, InsightStrip, StatsBar,
+                             LinkedListVisualizer, TreeVisualizer, GraphVisualizer,
+                             SearchTreeVisualizer, BoardVisualizer, InsightStrip, StatsBar,
                              ComplexityPanel, CallStackVisualizer, VariableVisualizer,
                              visible.js, svg.js
 ```
@@ -402,7 +490,8 @@ and `"loopBackTo": 5` when stopped on a loop's closing brace. Each step also has
            "methodCalls": 0, "maxDepth": 1, "loopIterations": 2 }
 ```
 
-(plus the collection counters and `verticesVisited`, `edgesExamined`, `relaxations`). When the program
+(plus the collection counters, `verticesVisited`, `edgesExamined`, `relaxations`, and for
+backtracking `nodesExplored`, `branchesPruned`, `solutionsFound`, `backtracks`). When the program
 has a graph, `insight.graph` describes it at that step:
 
 ```json
@@ -432,6 +521,20 @@ The response has an `analysis`:
                "formula": "n(n−1)/2", "value": 6, "scope": "program" }
   } ]
 }
+```
+
+For a backtracking program the analysis also has `searchTrees`:
+
+```json
+"searchTrees": [ {
+  "method": "solve", "problem": "n-queens", "kind": "loop", "depthVariable": "row", "choiceVariable": "col",
+  "assignment": "board", "assignmentShape": "matrix", "depthBound": 4, "branching": 4, "truncated": false,
+  "nodes": [
+    { "id": 0, "level": 0, "label": "", "choice": "first call", "firstStep": 2, "endStep": 258, "kind": "explored", "kindStep": 259 },
+    { "id": 1, "parent": 0, "level": 1, "label": "0", "choice": "col = 0", "firstStep": 11, "endStep": 161, "kind": "explored", "kindStep": 162 },
+    { "id": 2, "parent": 1, "level": 2, "label": "0", "choice": "col = 0", "firstStep": 16, "endStep": 16, "kind": "rejected", "kindStep": 16 }
+  ]
+} ]
 ```
 
 Collections appear in the heap as `"kind": "collection"` with `elements` (or `entries` for maps),
@@ -505,7 +608,16 @@ Not allowed: file I/O, network, processes, threads, reflection, `System.exit`, n
   readability up to about 15 vertices.
 - User methods called *by library code* (a comparator lambda inside `PriorityQueue`, `compareTo` during
   `Collections.sort`, `toString` during string concatenation) run without being stepped through.
-- Algorithm recognition covers the textbook shapes of eighteen algorithms. Unusual implementations
+- Backtracking needs a recursive method that goes one level deeper per call with a goal test at the
+  top (or a combination loop). Searches written with an explicit stack, recursion over a 2-D grid
+  (`solve(r, c + 1)` with wrap-around, as in many Sudoku solvers) and mutual recursion are not drawn as
+  state-space trees. Trees show the first 1500 nodes. A solution is detected by its effect (output,
+  a counter, a stored result, `return true` at a leaf), so a solution that is only kept in a local
+  variable is drawn as a dead end.
+- Rejected choices are shown when the check is an `if` around the recursive call or an
+  `if (...) continue;` before it, and its result is known (a method call such as `isSafe(...)`, or
+  values Vizard can evaluate).
+- Algorithm recognition covers the textbook shapes of twenty-three algorithms. Unusual implementations
   (e.g. a three-way quick sort, or merge sort without a separate merge loop) may not be recognised,
   in which case no complexity is claimed. Counts stay exact either way.
 - Comparisons are counted per evaluated condition, so `if (a[i] > x && a[i] < y)` counts once.

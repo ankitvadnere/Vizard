@@ -1,6 +1,6 @@
 # Vizard roadmap
 
-Updated after Milestone 6. The original brief planned seven milestones; this version adds
+Updated after Milestone 7. The original brief planned seven milestones; this version adds
 backtracking, dynamic programming and branch and bound, the core design paradigms of a DAA
 course, each with its own visualization and complexity analysis.
 
@@ -14,6 +14,7 @@ course, each with its own visualization and complexity analysis.
 | 4. Sorting & searching | Live operation counts, active ranges, algorithm recognition + complexity catalogue for 7 algorithms |
 | 5. Data structures | Collection contents and operations; stacks, queues, heaps, maps, sets, linked lists and trees drawn; BST, traversal and reversal recognition with measured tree height; cost of each collection call |
 | 6. Graphs | Graphs found by their neighbour loop (lists, maps, matrices, weighted edges); drawn with current vertex, frontier, visited set, examined edge, recursion path, distances and the BFS/DFS/shortest-path tree; BFS, DFS (recursive and iterative) and Dijkstra (heap and array) recognised with the representation deciding the complexity; vertices visited, edges examined and relaxations counted |
+| 7. Backtracking | Choose → check → recurse → undo recognised (N-Queens, permutations, subsets / subset sum, graph colouring, any other search); the state-space tree drawn as it grows with rejected, cut, dead-end and solution nodes; N-Queens board and coloured graph views; nodes explored vs the full tree; step over / step out |
 
 ## Principles for every remaining milestone
 
@@ -69,7 +70,11 @@ graphs, because they have no neighbour loop to anchor the traversal state to.
   binary-heap priority queue, O(V²) with a plain array. The representation actually used decides which.
 - **Statistics**: vertices visited, edges examined, relaxations.
 
-## Milestone 7 — Backtracking
+## Milestone 7 — Backtracking (done)
+
+Delivered as planned. Subset sum and permutations got their own views through the tree's labels
+(take / leave, the element chosen) rather than separate drawings; graph colouring paints the
+Milestone 6 graph.
 
 - **Recognition**: the *choose → check → recurse → undo* shape: a recursive method with a loop over
   choices, a feasibility check, a recursive call, and the choice undone after it.

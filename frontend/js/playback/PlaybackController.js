@@ -52,6 +52,28 @@ export class PlaybackController {
     }
 
     prev() { this.goTo(this.#index - 1); }
+
+    /** Next step in this call or its callers: the calls made from the current line run without stopping. */
+    stepOver() {
+        const depth = this.current?.depth ?? 0;
+        this.#goToFirst((s) => s.depth <= depth);
+    }
+
+    /** The first step back in the caller, after the current call has returned. */
+    stepOut() {
+        const depth = this.current?.depth ?? 0;
+        this.#goToFirst((s) => s.depth < depth);
+    }
+
+    #goToFirst(test) {
+        for (let i = this.#index + 1; i < this.#steps.length; i++) {
+            if (test(this.#steps[i])) {
+                this.goTo(i);
+                return;
+            }
+        }
+        this.last();
+    }
     first() { this.goTo(0); }
     last() { this.goTo(this.#steps.length - 1); }
 

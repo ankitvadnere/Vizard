@@ -59,6 +59,14 @@
                         <svg viewBox="0 0 16 16"><path d="M1 3v10l5-5z M7 3v10l5-5z M12 3h2v10h-2z"/></svg>
                     </button>
                 </div>
+                <div class="transport" role="group" aria-label="Call controls">
+                    <button type="button" data-action="over" aria-label="Step over: skip the call this line makes (Shift + Right arrow)" title="Step over: run the calls on this line without stopping (Shift+→)">
+                        <svg viewBox="0 0 16 16"><path d="M2 11a6 6 0 0 1 10.5-4H10l3.5 4L16 7h-2.2A7.5 7.5 0 0 0 .6 11z M6 12h3v3H6z"/></svg>
+                    </button>
+                    <button type="button" data-action="out" aria-label="Step out: finish this call (Shift + Up arrow)" title="Step out: finish this call and go back to its caller (Shift+↑)">
+                        <svg viewBox="0 0 16 16"><path d="M8 1l5 5h-3.5v5h-3V6H3z M3 13h10v2H3z"/></svg>
+                    </button>
+                </div>
 
                 <input id="step-slider" class="step-slider" type="range" min="0" max="0" value="0" aria-label="Step">
                 <span id="step-counter" class="step-counter">Step 1 of 1</span>
@@ -76,17 +84,27 @@
                 <button id="exit-trace" class="text-button" type="button">Exit</button>
             </div>
             <p id="step-description" class="step-description" aria-live="polite"></p>
+            <p id="step-code" class="step-code" hidden></p>
         </div>
     </section>
 
     <section class="pane viz-pane" aria-label="Visualization">
         <div class="pane-header">
             <h2>Visualization</h2>
-            <span id="viz-label" class="hint"></span>
+            <div class="pane-actions">
+                <span id="viz-label" class="hint"></span>
+                <button id="viz-fullscreen" class="text-button icon-button" type="button"
+                        aria-label="Full screen (F)" title="Full screen (F); Esc to leave" aria-pressed="false">
+                    <svg class="icon-enter" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 1h5v2H3v3H1z M10 1h5v5h-2V3h-3z M1 10h2v3h3v2H1z M13 10h2v5h-5v-2h3z"/></svg>
+                    <svg class="icon-exit" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1h2v5H1V4h3z M10 1h2v3h3v2h-5z M1 10h5v5H4v-3H1z M10 10h5v2h-3v3h-2z"/></svg>
+                    <span class="icon-text">Full screen</span>
+                </button>
+            </div>
         </div>
         <div class="viz-body">
             <div class="viz-main">
                 <div id="insights" class="insights"></div>
+                <div id="search" class="arrays"></div>
                 <div id="graph" class="arrays"></div>
                 <div id="arrays" class="arrays"></div>
                 <div id="structures" class="arrays"></div>
@@ -96,7 +114,10 @@
                 <ol id="call-stack" class="call-stack"></ol>
             </aside>
         </div>
-        <div id="stats" class="stats-bar" aria-label="Execution statistics" hidden></div>
+        <details id="stats-panel" class="stats-panel" hidden>
+            <summary>Operation counts <span id="stats-summary" class="hint"></span></summary>
+            <div id="stats" class="stats-bar" aria-label="Execution statistics"></div>
+        </details>
         <div id="viz-legend" class="legend" hidden>
             <span><i class="swatch compared"></i>Compared</span>
             <span><i class="swatch read"></i>Read</span>

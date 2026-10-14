@@ -19,6 +19,8 @@ export class PlaybackBar {
             play: () => controller.toggle(),
             next: () => { controller.pause(); controller.next(); },
             last: () => controller.last(),
+            over: () => { controller.pause(); controller.stepOver(); },
+            out: () => { controller.pause(); controller.stepOut(); },
         };
         for (const [name, button] of Object.entries(this.buttons)) {
             button.addEventListener("click", actions[name]);
@@ -51,6 +53,8 @@ export class PlaybackBar {
         this.buttons.prev.disabled = c.atStart;
         this.buttons.next.disabled = c.atEnd;
         this.buttons.last.disabled = c.atEnd;
+        this.buttons.over.disabled = c.atEnd;
+        this.buttons.out.disabled = c.atEnd || (step.depth ?? 1) <= 1;
         this.buttons.play.dataset.playing = String(c.playing);
         this.buttons.play.setAttribute("aria-label", c.playing ? "Pause (Space)" : "Play (Space)");
     }
@@ -61,7 +65,9 @@ export class PlaybackBar {
         const target = e.target;
         const typing = target.closest?.(".monaco-editor") || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
         if (typing) return;
-        const map = { ArrowRight: "next", ArrowLeft: "prev", " ": "play", Home: "first", End: "last" };
+        const map = e.shiftKey
+            ? { ArrowRight: "over", ArrowUp: "out" }
+            : { ArrowRight: "next", ArrowLeft: "prev", " ": "play", Home: "first", End: "last" };
         const action = map[e.key];
         if (action) {
             e.preventDefault();

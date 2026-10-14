@@ -46,7 +46,8 @@ export class GraphVisualizer {
     }
 
     /** Draws the graph of this step; returns 1 if one was drawn, else 0. */
-    render(step, previous) {
+    /** @param paint optional colour number per vertex index (graph colouring: color[v] = c, 0 = none) */
+    render(step, previous, paint = null) {
         this.container.replaceChildren();
         const g = step.insight?.graph;
         if (!g || g.vertices.length === 0) return 0;
@@ -56,12 +57,12 @@ export class GraphVisualizer {
             this.layouts.set(g.ref, positions);
         }
         const before = previous?.insight?.graph?.ref === g.ref ? previous.insight.graph : null;
-        this.container.append(drawGraph(g, positions, before));
+        this.container.append(drawGraph(g, positions, before, paint));
         return 1;
     }
 }
 
-function drawGraph(g, positions, before) {
+function drawGraph(g, positions, before, paint) {
     const block = document.createElement("div");
     block.className = "array-block graph-block";
 
@@ -137,8 +138,10 @@ function drawGraph(g, positions, before) {
             onStack.has(v) && g.current !== v ? "on-stack" : "",
             g.current === v ? "current" : "",
             isTarget ? "target" : ""].filter(Boolean).join(" ");
-        const node = el("g", { class: cls });
+        const colour = paint && /^\d+$/.test(v) ? paint[Number(v)] ?? 0 : 0;
+        const node = el("g", { class: colour > 0 ? `${cls} paint paint-${((colour - 1) % 6) + 1}` : cls });
         node.append(el("circle", { cx: p.x, cy: p.y, r: R }));
+        if (colour > 0) node.append(el("title", {}, `vertex ${v}: colour ${colour}`));
         node.append(text("vertex-label", p.x, p.y, v.length > 4 ? `${v.slice(0, 3)}…` : v, "middle"));
         svg.append(node);
 

@@ -20,13 +20,34 @@ const COUNTERS = [
     ["verticesVisited", "Vertices visited", "Graph vertices visited so far (settled, for Dijkstra)"],
     ["edgesExamined", "Edges examined", "Neighbour-loop iterations: one per edge looked at (per matrix cell for a matrix)"],
     ["relaxations", "Relaxations", "Distance improvements: dist[v] = dist[u] + w"],
+    ["nodesExplored", "Nodes explored", "Calls of the backtracking method: nodes of the state-space tree"],
+    ["branchesPruned", "Pruned", "Choices rejected by the check, plus calls cut short by a bound check"],
+    ["solutionsFound", "Solutions", "Nodes where a solution was printed, counted, stored or returned"],
+    ["backtracks", "Backtracks", "Returns to the level above, where the choice is undone"],
 ];
 const MIN_SHOWN = ["comparisons", "swaps", "loopIterations"];
 
 export class StatsBar {
     constructor(container) {
         this.container = container;
+        // The counters live in a collapsible "Operation counts" section, closed unless the user opened it.
+        this.panel = container.closest("details");
+        this.summary = document.getElementById("stats-summary");
         this.cells = new Map();
+        if (this.panel) {
+            try {
+                this.panel.open = localStorage.getItem("vizard.statsOpen") === "1";
+            } catch {
+                // storage unavailable: stay closed
+            }
+            this.panel.addEventListener("toggle", () => {
+                try {
+                    localStorage.setItem("vizard.statsOpen", this.panel.open ? "1" : "0");
+                } catch {
+                    // ignore
+                }
+            });
+        }
     }
 
     /** Shows the counters this run uses: those not zero at the end (and a few basics if all are). */
@@ -52,10 +73,11 @@ export class StatsBar {
             this.cells.set(key, { cell, value });
         }
         this.container.style.setProperty("--stat-count", String(chosen.length));
+        if (this.summary) this.summary.textContent = `${chosen.length} counters for this run`;
     }
 
     hide() {
-        this.container.hidden = true;
+        (this.panel ?? this.container).hidden = true;
     }
 
     /** @param previous stats of the step before (null at the first step) */
@@ -64,7 +86,7 @@ export class StatsBar {
             this.hide();
             return;
         }
-        this.container.hidden = false;
+        (this.panel ?? this.container).hidden = false;
         for (const [key, { cell, value }] of this.cells) {
             value.textContent = String(stats[key] ?? 0);
             const bumped = previous && (stats[key] ?? 0) > (previous[key] ?? 0);
