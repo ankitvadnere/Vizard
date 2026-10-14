@@ -7,6 +7,7 @@ import com.vizard.api.dto.analysis.InputSize;
 import com.vizard.api.dto.analysis.OperationCost;
 import com.vizard.api.dto.analysis.StructureUse;
 import com.vizard.api.dto.analysis.ProgramAnalysis;
+import com.vizard.api.dto.analysis.DpTable;
 import com.vizard.api.dto.analysis.SearchTree;
 import com.vizard.api.dto.trace.FrameSnapshot;
 import com.vizard.api.dto.trace.GraphInsight;
@@ -82,7 +83,7 @@ public class TraceRunner {
                 TraceAnnotator.Annotated annotated = annotate(StructureRoles.apply(
                         OutputOffsets.toCharacterOffsets(recording.steps(), result.stdout())), program.codeModel());
                 return new TraceResponse(execution, annotated.steps(), recording.truncated(), props.maxTraceSteps(),
-                        analyse(program, annotated.steps(), annotated.searchTrees()));
+                        analyse(program, annotated));
             }
         }
     }
@@ -90,25 +91,27 @@ public class TraceRunner {
     /** Adds conditions, array accesses, swaps and loop counts. Never fails the trace. */
     private static TraceAnnotator.Annotated annotate(List<TraceStep> steps, CodeModel model) {
         if (model == null) {
-            return new TraceAnnotator.Annotated(steps, List.of());
+            return new TraceAnnotator.Annotated(steps, List.of(), List.of());
         }
         try {
             return TraceAnnotator.annotateAll(steps, model);
         } catch (RuntimeException e) {
             log.warn("Could not annotate the trace; steps will have no insights", e);
-            return new TraceAnnotator.Annotated(steps, List.of());
+            return new TraceAnnotator.Annotated(steps, List.of(), List.of());
         }
     }
 
     /** Recognised algorithms with their complexity, with the bounds evaluated for this run's n. */
-    private static ProgramAnalysis analyse(PreparedProgram program, List<TraceStep> steps, List<SearchTree> trees) {
+    private static ProgramAnalysis analyse(PreparedProgram program, TraceAnnotator.Annotated annotated) {
+        List<TraceStep> steps = annotated.steps();
+        List<SearchTree> trees = annotated.searchTrees();
         InputSize input = inputSize(steps);
         Integer n = input == null ? null : input.n();
-        StructureFacts facts = searchFacts(graphFacts(structureFacts(steps), steps), trees);
+        StructureFacts facts = methodFacts(searchFacts(graphFacts(structureFacts(steps), steps), trees), annotated);
         List<AlgorithmMatch> matches = program.algorithms().stream()
                 .map(d -> AlgorithmCatalog.describe(d, n, facts))
                 .toList();
-        return new ProgramAnalysis(matches, input, structureUses(steps), trees);
+        return new ProgramAnalysis(matches, input, structureUses(steps), trees, annotated.dpTables());
     }
 
     /**
@@ -245,6 +248,9 @@ public class TraceRunner {
     static StructureFacts searchFacts(StructureFacts facts, List<SearchTree> trees) {
         SearchTree best = null;
         for (SearchTree t : trees) {
+            if (t.kind().equals("memo") || t.kind().equals("recursion")) {
+                continue; // recursion trees of DP methods have their own facts
+            }
             if (best == null || t.nodes().size() > best.nodes().size()) {
                 best = t;
             }
@@ -254,6 +260,38 @@ public class TraceRunner {
         }
         int explored = (int) best.nodes().stream().filter(x -> !x.kind().equals("rejected")).count();
         return facts.withSearch(best.depthBound(), best.branching(), explored);
+    }
+
+    /**
+     * Per method: calls, memo hits, repeated calls and the first call's argument (recursion trees);
+     * rows, columns and distinct cells filled (DP tables).
+     */
+    static StructureFacts methodFacts(StructureFacts facts, TraceAnnotator.Annotated annotated) {
+        Map<String, Map<String, Long>> perMethod = new HashMap<>();
+        for (SearchTree t : annotated.searchTrees()) {
+            if (!t.kind().equals("memo") && !t.kind().equals("recursion")) {
+                continue;
+            }
+            Map<String, Long> m = perMethod.computeIfAbsent(t.method(), k -> new HashMap<>());
+            m.merge("calls", (long) t.nodes().size(), Long::sum);
+            m.merge("hits", t.nodes().stream().filter(x -> x.kind().equals("hit")).count(), Long::sum);
+            m.merge("repeats", t.nodes().stream().filter(x -> x.kind().equals("repeat")).count(), Long::sum);
+            m.merge("distinct", t.nodes().stream().map(x -> x.label()).distinct().count(), Long::sum);
+            String first = t.nodes().get(0).label();
+            if (first.matches("-?\\d+")) {
+                m.putIfAbsent("n", Long.parseLong(first));
+            }
+        }
+        for (DpTable table : annotated.dpTables()) {
+            Map<String, Long> m = perMethod.computeIfAbsent(table.method(), k -> new HashMap<>());
+            long rows = table.rows();
+            long cols = table.cols();
+            m.merge("rows", rows, Math::max);
+            m.merge("cols", cols, Math::max);
+            m.merge("cells", table.writes().stream().map(w -> w.row() + "," + w.col()).distinct().count(), Long::sum);
+            m.merge("writes", (long) table.writes().size(), Long::sum);
+        }
+        return facts.withMethods(perMethod);
     }
 
     /** V and E of the largest graph any step drew (the graph as complete as it got). */

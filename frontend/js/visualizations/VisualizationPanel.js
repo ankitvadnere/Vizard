@@ -5,6 +5,7 @@ import { InsightStrip } from "./InsightStrip.js";
 import { CallStackVisualizer } from "./CallStackVisualizer.js";
 import { GraphVisualizer } from "./GraphVisualizer.js";
 import { SearchTreeVisualizer } from "./SearchTreeVisualizer.js";
+import { DpTableVisualizer } from "./DpTableVisualizer.js";
 import { assignmentValues, drawBoard, searchStarted } from "./BoardVisualizer.js";
 import { StatsBar } from "./StatsBar.js";
 import { StructureVisualizer } from "./StructureVisualizer.js";
@@ -15,6 +16,8 @@ export class VisualizationPanel {
         this.arraysEl = document.getElementById("arrays");
         this.graphEl = document.getElementById("graph");
         this.graph = new GraphVisualizer(this.graphEl);
+        this.dpEl = document.getElementById("dp");
+        this.dp = new DpTableVisualizer(this.dpEl);
         this.searchEl = document.getElementById("search");
         this.search = new SearchTreeVisualizer(this.searchEl, (index) => this.onJump?.(index));
         this.trees = [];
@@ -35,6 +38,7 @@ export class VisualizationPanel {
         this.arraysEl.replaceChildren(note("viz-empty", message));
         this.graphEl.replaceChildren();
         this.searchEl.replaceChildren();
+        this.dpEl.replaceChildren();
         this.structuresEl.replaceChildren();
         this.callStack.showEmpty();
         this.stats.hide();
@@ -53,12 +57,14 @@ export class VisualizationPanel {
         this.stats.configure(steps.at(-1)?.stats ?? null);
         this.graph.load(steps);
         this.search.load(analysis);
+        this.dp.load(analysis, steps);
         this.trees = analysis?.searchTrees ?? [];
     }
 
     render(step, { animate = false, previous = null } = {}) {
         this.label.textContent = `line ${step.line}`;
         this.insights.render(step);
+        const dpRefs = this.dp.render(step);
         const searches = this.search.render(step);
         let boards = 0;
         let paint = null;
@@ -74,9 +80,9 @@ export class VisualizationPanel {
             if (tree.problem === "graph-coloring") paint = assignmentValues(tree, step);
         }
         const graphs = this.graph.render(step, previous, paint);
-        const arrays = this.arrays.render(step, { animate });
+        const arrays = this.arrays.render(step, { animate, skip: new Set(dpRefs) });
         const structures = this.structures.render(step, previous);
-        if (arrays + structures + graphs + searches + boards === 0) {
+        if (arrays + structures + graphs + searches + boards + dpRefs.length === 0) {
             this.arraysEl.append(note("viz-note", "No arrays or data structures in this method."));
         }
         this.legend.hidden = arrays === 0;

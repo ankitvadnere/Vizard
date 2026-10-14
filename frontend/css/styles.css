@@ -155,7 +155,7 @@ select {
     padding: 8px 12px 10px;
     background: var(--raised);
 }
-.playback-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.playback-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .transport { display: flex; gap: 4px; }
 .transport button {
@@ -176,7 +176,7 @@ select {
 .transport .play[data-playing="true"] .icon-play { display: none; }
 .transport .play[data-playing="true"] .icon-pause { display: block; }
 
-.step-slider { flex: 1; min-width: 120px; accent-color: var(--amber); }
+.step-slider { flex: 1; min-width: 70px; accent-color: var(--amber); }
 .step-counter { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
 .speed select { padding: 4px 8px; }
 
@@ -425,6 +425,45 @@ select {
 .board-svg .square.try.rejected rect { stroke: var(--err); }
 .board-svg .queen { fill: var(--amber); font-size: 22px; dominant-baseline: central; }
 .board-svg .index { fill: var(--muted); font: 10px var(--font-code); dominant-baseline: central; }
+
+/* Recursion trees (DP): computed, base case, memo hit, repeated call. */
+.search-svg .search-node.computed circle { stroke: var(--muted); }
+.search-svg .search-node.base circle { fill: var(--raised); stroke: var(--line); }
+.search-svg .search-node.base .search-label { fill: var(--muted); }
+.search-svg .search-node.hit circle { fill: rgba(122, 167, 224, 0.25); stroke: #7aa7e0; stroke-width: 2.2; stroke-dasharray: 4 2; }
+.search-svg .search-node.repeat circle { fill: rgba(239, 111, 108, 0.22); stroke: var(--err); }
+.swatch.search-computed { border: 1.5px solid var(--muted); border-radius: 50%; }
+.swatch.search-base { background: var(--raised); border-radius: 50%; }
+.swatch.search-hit { background: rgba(122, 167, 224, 0.25); border: 2px dashed #7aa7e0; border-radius: 50%; }
+.swatch.search-repeat { background: rgba(239, 111, 108, 0.22); border: 1.5px solid var(--err); border-radius: 50%; }
+
+/* DP tables */
+.dp-svg .dp-cell rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; }
+.dp-svg .dp-cell text { fill: var(--text); font: 12.5px var(--font-code); dominant-baseline: central; }
+.dp-svg .dp-cell.pending rect { fill: transparent; stroke-dasharray: 3 3; }
+.dp-svg .dp-cell.pending text { fill: #5c6880; }
+.dp-svg .dp-cell.base rect { fill: var(--raised); }
+.dp-svg .dp-cell.base text { fill: var(--muted); }
+.dp-svg .dp-cell.filled rect { fill: rgba(79, 192, 141, 0.12); stroke: rgba(79, 192, 141, 0.5); }
+.dp-svg .dp-cell.read rect { fill: rgba(122, 167, 224, 0.2); stroke: #7aa7e0; stroke-width: 2.2; }
+.dp-svg .dp-cell.current rect { fill: var(--amber-soft); stroke: var(--amber); stroke-width: 2.6; }
+.dp-svg .dp-cell.current text { fill: var(--amber); font-weight: 600; }
+.dp-svg .dp-cell.fresh rect { animation: cell-flash 600ms ease-out; }
+.dp-svg .dp-index { fill: var(--muted); font: 10.5px var(--font-code); dominant-baseline: central; }
+.dp-svg .dp-letter { fill: var(--text); font: 600 12px var(--font-code); dominant-baseline: central; }
+.dp-svg .dp-axis { fill: var(--muted); font: 10px var(--font-code); }
+.dp-svg .dp-arrow { fill: none; stroke: #7aa7e0; stroke-width: 1.8; }
+.dp-svg .dp-arrowhead { fill: #7aa7e0; }
+.dp-formula { margin-top: 4px; font: 12.5px var(--font-code); display: flex; flex-direction: column; gap: 1px; }
+.dp-formula .dp-written { color: var(--muted); }
+.dp-formula .dp-values { color: var(--text); }
+.dp-formula .dp-result { color: var(--amber); font-weight: 600; }
+.swatch.dp-current { background: var(--amber-soft); border: 2px solid var(--amber); }
+.swatch.dp-read { background: rgba(122, 167, 224, 0.2); border: 2px solid #7aa7e0; }
+.swatch.dp-filled { background: rgba(79, 192, 141, 0.12); border-color: rgba(79, 192, 141, 0.5); }
+.swatch.dp-pending { border-style: dashed; }
+.swatch.dp-base { background: var(--raised); }
+.viz-focus .dp-svg { zoom: 1.3; }
 
 /* Graph colouring: vertex fills by colour number. */
 .graph-svg .graph-vertex.paint-1 circle { fill: #4f7fd6; }
@@ -723,4 +762,5 @@ body:not(.viz-focus) .step-code { display: none; }
     .stat, .bound-fill { transition: none; }
     .structure-svg .list-node.flash rect:first-child, .structure-svg .tree-node.flash circle { animation: none; }
     .search-svg .search-node.new circle, .search-svg .search-node.new rect { animation: none; }
+    .dp-svg .dp-cell.fresh rect { animation: none; }
 }

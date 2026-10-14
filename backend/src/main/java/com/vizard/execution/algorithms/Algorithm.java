@@ -24,7 +24,17 @@ public enum Algorithm {
     PERMUTATIONS("permutations", "Permutations (backtracking)", "Backtracking"),
     SUBSETS("subsets", "Subsets / subset sum (backtracking)", "Backtracking"),
     GRAPH_COLORING("graph-coloring", "Graph colouring (backtracking)", "Backtracking"),
-    BACKTRACKING("backtracking", "Backtracking search", "Backtracking");
+    BACKTRACKING("backtracking", "Backtracking search", "Backtracking"),
+    FIBONACCI_NAIVE("fibonacci-naive", "Fibonacci (plain recursion)", "Dynamic programming"),
+    FIBONACCI_MEMO("fibonacci-memo", "Fibonacci (memoisation)", "Dynamic programming"),
+    FIBONACCI_TABLE("fibonacci-table", "Fibonacci (tabulation)", "Dynamic programming"),
+    KNAPSACK("knapsack", "0/1 knapsack (DP)", "Dynamic programming"),
+    LCS("lcs", "Longest common subsequence", "Dynamic programming"),
+    EDIT_DISTANCE("edit-distance", "Edit distance", "Dynamic programming"),
+    COIN_CHANGE("coin-change", "Coin change (DP)", "Dynamic programming"),
+    MATRIX_CHAIN("matrix-chain", "Matrix chain multiplication", "Dynamic programming"),
+    DP_MEMO("dp-memo", "Dynamic programming (memoisation)", "Dynamic programming"),
+    DP_TABLE("dp-table", "Dynamic programming (tabulation)", "Dynamic programming");
 
     private final String id;
     private final String displayName;

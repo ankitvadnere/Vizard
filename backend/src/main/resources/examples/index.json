@@ -28,5 +28,12 @@
   {"id": "n-queens", "title": "N-Queens (4 × 4)", "group": "Backtracking", "algorithms": ["n-queens"]},
   {"id": "permutations", "title": "Permutations of {1, 2, 3}", "group": "Backtracking", "algorithms": ["permutations"]},
   {"id": "subset-sum", "title": "Subset sum (take or leave)", "group": "Backtracking", "algorithms": ["subsets"]},
-  {"id": "graph-coloring", "title": "Graph colouring (m = 3)", "group": "Backtracking", "algorithms": ["graph-coloring"]}
+  {"id": "graph-coloring", "title": "Graph colouring (m = 3)", "group": "Backtracking", "algorithms": ["graph-coloring"]},
+  {"id": "fibonacci", "title": "Fibonacci three ways", "group": "Dynamic programming", "algorithms": ["fibonacci-naive", "fibonacci-memo", "fibonacci-table"]},
+  {"id": "knapsack", "title": "0/1 knapsack (table)", "group": "Dynamic programming", "algorithms": ["knapsack"]},
+  {"id": "knapsack-memo", "title": "0/1 knapsack (memoised)", "group": "Dynamic programming", "algorithms": ["knapsack"]},
+  {"id": "lcs", "title": "Longest common subsequence", "group": "Dynamic programming", "algorithms": ["lcs"]},
+  {"id": "edit-distance", "title": "Edit distance", "group": "Dynamic programming", "algorithms": ["edit-distance"]},
+  {"id": "coin-change", "title": "Coin change (fewest coins)", "group": "Dynamic programming", "algorithms": ["coin-change"]},
+  {"id": "matrix-chain", "title": "Matrix chain multiplication", "group": "Dynamic programming", "algorithms": ["matrix-chain"]}
 ]

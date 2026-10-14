@@ -70,8 +70,8 @@ public final class BacktrackModelBuilder {
     }
 
     public static Optional<SearchSpec> find(MethodDeclaration m, CompilationUnit cu) {
-        if (m.getBody().isEmpty()) {
-            return Optional.empty();
+        if (m.getBody().isEmpty() || DpModelBuilder.memo(m).isPresent()) {
+            return Optional.empty(); // a memoised recursion is dynamic programming, not a search
         }
         List<MethodCallExpr> calls = m.findAll(MethodCallExpr.class).stream()
                 .filter(c -> c.getNameAsString().equals(m.getNameAsString())

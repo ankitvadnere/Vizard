@@ -21,7 +21,12 @@ const PAD = 22;
 const KIND_TEXT = {
     explored: "explored", solution: "solution", "dead-end": "dead end",
     pruned: "pruned by a bound check", rejected: "rejected by the check (never called)",
+    computed: "computed", base: "base case", hit: "answered from the memo (not computed again)",
+    repeat: "repeated: these arguments were already computed (wasted work)",
 };
+
+/** Recursion trees of DP methods (memoised or plain) rather than backtracking state-space trees. */
+const isRecursion = (tree) => tree.kind === "memo" || tree.kind === "recursion";
 
 export class SearchTreeVisualizer {
     constructor(container, onJump) {
@@ -64,12 +69,14 @@ export class SearchTreeVisualizer {
         block.className = "array-block search-block";
         const title = document.createElement("div");
         title.className = "array-title";
-        title.textContent = `State-space tree · ${tree.method}()`;
+        title.textContent = `${isRecursion(tree) ? "Recursion tree" : "State-space tree"} · ${tree.method}()`;
         const meta = document.createElement("span");
         meta.className = "meta";
         const level = tree.depthVariable ? `level = ${tree.depthVariable}` : "level = depth of the call";
         const branch = tree.kind === "binary" ? "branch = take / leave" : `branch = ${tree.choiceVariable}`;
-        meta.textContent = `${level} · ${branch}${tree.truncated ? " · first 1500 nodes" : ""}`;
+        meta.textContent = isRecursion(tree)
+            ? `each node is a call, labelled with its arguments${tree.kind === "memo" ? ` · memo: ${tree.assignment}` : " · nothing remembered"}`
+            : `${level} · ${branch}${tree.truncated ? " · first 1500 nodes" : ""}`;
         title.append(meta);
         block.append(title);
 
@@ -100,7 +107,7 @@ export class SearchTreeVisualizer {
                 g.append(text("search-under", p.x, p.y + 17, n.label, "middle"));
             } else {
                 g.append(el("circle", { cx: p.x, cy: p.y, r: R }));
-                const label = n.parent == null ? "●" : n.label;
+                const label = n.parent == null && !isRecursion(tree) ? "●" : n.label;
                 g.append(text("search-label", p.x, p.y, label.length > 4 ? `${label.slice(0, 3)}…` : label, "middle"));
                 if (state === "solution") g.append(text("search-star", p.x + R - 2, p.y - R + 1, "★", "middle"));
             }
@@ -143,6 +150,7 @@ export function stateAt(n, k) {
 }
 
 function counts(tree, states, current) {
+    if (isRecursion(tree)) return recursionCounts(tree, states);
     const tally = { active: 0, explored: 0, solution: 0, "dead-end": 0, pruned: 0, rejected: 0 };
     for (const n of tree.nodes) if (states[n.id] in tally) tally[states[n.id]]++;
     const p = document.createElement("div");
@@ -177,9 +185,42 @@ function counts(tree, states, current) {
     return p;
 }
 
+function recursionCounts(tree, states) {
+    const shown = tree.nodes.filter((n) => states[n.id] !== "hidden");
+    const count = (kind) => shown.filter((n) => states[n.id] === kind).length;
+    const parts = [`${shown.length} call${shown.length === 1 ? "" : "s"} so far`];
+    if (tree.kind === "memo") parts.push(`${count("hit")} answered from the memo`);
+    else parts.push(`${count("repeat")} repeated (already computed before)`);
+    const box = document.createElement("div");
+    box.className = "graph-state";
+    const row = document.createElement("div");
+    row.className = "graph-line";
+    const label = document.createElement("span");
+    label.className = "graph-line-label";
+    label.textContent = "so far";
+    const value = document.createElement("code");
+    value.textContent = parts.join(" · ");
+    row.append(label, value);
+    box.append(row);
+    return box;
+}
+
 function legend(tree) {
     const p = document.createElement("div");
     p.className = "legend graph-legend";
+    if (isRecursion(tree)) {
+        const items = [["active", "Current call"], ["path", "Calls waiting for it"], ["computed", "Computed"],
+            ["base", "Base case"], tree.kind === "memo" ? ["hit", "Memo hit: answered without recursing"]
+                : ["repeat", "Repeated call (wasted work)"]];
+        for (const [cls, label] of items) {
+            const span = document.createElement("span");
+            const swatch = document.createElement("i");
+            swatch.className = `swatch search-${cls}`;
+            span.append(swatch, label);
+            p.append(span);
+        }
+        return p;
+    }
     const items = [["active", "Current call"], ["path", "Path to it"], ["solution", "Solution"],
         ["dead-end", "Dead end"], ["rejected", "Rejected by the check"]];
     if (tree.nodes.some((n) => n.kind === "pruned")) items.push(["pruned", "Cut by a bound check"]);

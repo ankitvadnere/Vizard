@@ -3,11 +3,12 @@
 Interactive Java code execution, step-by-step debugging and algorithm visualization, built as a
 Design and Analysis of Algorithms course project.
 
-> Status: **Milestone 7** — step through Java forwards and backwards and *see* it run: arrays, pointers,
+> Status: **Milestone 8** — step through Java forwards and backwards and *see* it run: arrays, pointers,
 > conditions and loops; stacks, queues, priority queues, maps and sets; your own linked lists and binary
-> trees; graphs with BFS, DFS and Dijkstra traversals; backtracking as a growing state-space tree.
-> Live operation counts, and complexity analysis for the sorting, searching, tree, list, graph and
-> backtracking algorithms taught in DAA.
+> trees; graphs with BFS, DFS and Dijkstra traversals; backtracking as a growing state-space tree;
+> dynamic programming as a table filling cell by cell and as recursion trees with memo hits.
+> Live operation counts, and complexity analysis for the sorting, searching, tree, list, graph,
+> backtracking and dynamic-programming algorithms taught in DAA.
 
 ## Screenshots
 
@@ -69,6 +70,20 @@ Subset sum: each level takes (`+3`) or leaves (`−3`) one element; red dashed c
 Permutations: every leaf is an ordering; the `used[]` check rejects elements already taken.
 
 ![Permutations](docs/screenshots/permutations.png)
+
+0/1 knapsack, bottom-up: `dp[3][5]` is being computed from the cells it reads (blue, with arrows),
+and the line is shown with its values: `max(35, 15 + 30)` → 45.
+
+![Knapsack table](docs/screenshots/knapsack-table.png)
+
+Fibonacci three ways, full screen: plain recursion makes 25 calls, 18 of them repeats (red); the
+memoised version makes 11, and 3 are answered from the memo (blue, dashed) without recursing.
+
+![Fibonacci recursion trees](docs/screenshots/fibonacci-trees.png)
+
+Longest common subsequence: rows and columns are labelled with the letters of the two strings.
+
+![LCS table](docs/screenshots/lcs-table.png)
 
 ## How it works
 
@@ -151,6 +166,9 @@ Every step carries running totals up to that step, so stepping back rewinds them
 | Pruned | choices rejected by the check, plus calls cut by a bound check |
 | Solutions | nodes where a solution was recorded |
 | Backtracks | returns from a call to the level above, where the choice is undone |
+| Cells filled | distinct cells of DP or memo tables given a value |
+| Memo hits | calls answered from the memo instead of being computed again |
+| Repeated calls | plain recursion: calls whose arguments were already computed (wasted work) |
 
 Comparisons also count conditions that compare a node's value field, such as `key < root.key` in a BST;
 pointer checks like `root.left == null` are not comparisons. Only the counters a program uses are shown.
@@ -323,6 +341,47 @@ under the visualization (it remembers whether you opened it).
 *step over* (Shift+→) runs the calls made on the current line without stopping, and *step out*
 (Shift+↑) finishes the current call and stops back in its caller.
 
+### How dynamic programming is recognised and drawn
+
+**Tabulation (bottom-up).** `DpModelBuilder` looks for an array the method *creates* and fills inside
+loops from cells of the same array: `dp[i] = dp[i - 1] + dp[i - 2]`, or a local computed from it
+(`int cost = dp[i][k] + dp[k + 1][j] + …`). Reading the same array is the recurrence. An insertion
+sort (whose array is a parameter), a prefix sum (`p[i] = p[i - 1] + a[i]`, one look back in one loop)
+and the `dist[]` of BFS or Dijkstra (graph state, drawn on the graph) are not DP tables.
+
+**Memoisation (top-down).** A recursive method that checks a memo first and stores into it:
+`if (memo[n] != -1) return memo[n];` … `memo[n] = …` (a `HashMap` with `containsKey` / `put` works too).
+
+**Plain recursion** with two or more recursive calls whose arguments are the parameters plus or minus
+constants (`fib(n - 1) + fib(n - 2)`) is drawn as a recursion tree, with every call whose arguments
+were already computed marked as a **repeat**: the work DP saves.
+
+| Problem | Named by | Time | Space |
+|---|---|---|---|
+| Fibonacci, plain recursion | `f(n − 1) + f(n − 2)`, nothing remembered | O(2ⁿ) (2·F(n+1) − 1 calls) | O(n) |
+| Fibonacci, memoised / tabulated | the same with a memo / a table | O(n) | O(n) |
+| 0/1 knapsack | `max` with the capacity reduced by an item's weight | O(n·W) | O(n·W) |
+| Longest common subsequence | letters compared (`charAt`), `max` | O(m·n) | O(m·n) |
+| Edit distance | letters compared, `min` of three neighbours | O(m·n) | O(m·n) |
+| Coin change | a 1-D table looking back by a coin's value, `dp[a − coin]` | O(A·k) | O(A) |
+| Matrix chain | `dp[i][k] + dp[k + 1][j]` over a split point k | O(n³) | O(n²) |
+| Any other table / memo | the shape alone | from the loops / the number of states | the table |
+
+Recursive knapsack *without* a memo stays what Milestone 7 calls it (a take/leave search, O(2ⁿ)); add a
+memo and it becomes dynamic programming, O(n·W).
+
+**The table view** (`DpTracker`, `DpTableVisualizer`): on a line that uses the table, the cell being
+computed is amber, the cells it reads are blue with arrows into it, and below the table the line is
+shown as written and with its values (`dp[3][5] = Math.max(dp[i][w], dp[i - 1][w - wt[i - 1]] + val[i - 1])`
+→ `max(35, 15 + 30)` → `45`). Filled cells are green, cells not computed yet are faded, and cells the
+program only ever reads (the zero row of a knapsack table) are marked as base values. Every write is
+recorded with the step at which its value appears (`analysis.dpTables`), so stepping backwards un-fills
+the table. LCS and edit-distance tables are labelled with the letters of the two strings.
+
+**The recursion tree** (`RecursionTracker`) reuses the Milestone 7 tree: one node per call, labelled
+with its arguments. A memo hit (the call returned from the memo check) is drawn blue and dashed: its
+subtree was never built.
+
 ### How a condition's result is decided
 
 For `if (arr[j] > arr[j + 1])` Vizard shows `5 > 2` and `true`. The values come from a small
@@ -356,20 +415,23 @@ vizard/
 │       │       │                   SameLineLoops, TraceRunner, ...
 │       │       ├── insight/        CodeModelBuilder, CodeModel, Expr, ExpressionEvaluator,
 │       │       │                   TraceAnnotator, StructureRoles, GraphModelBuilder, GraphTracker,
-│       │       │                   BacktrackModelBuilder, SearchTracker
+│       │       │                   BacktrackModelBuilder, SearchTracker, DpModelBuilder,
+│       │       │                   DpTracker, RecursionTracker
 │       │       └── algorithms/     AlgorithmDetector, StructureAlgorithms, GraphAlgorithms,
-│       │                           BacktrackAlgorithms, SearchCosts, AlgorithmCatalog, StructureCosts,
+│       │                           BacktrackAlgorithms, SearchCosts, DpAlgorithms, DpCosts,
+│       │                           AlgorithmCatalog, StructureCosts,
 │       │                           StructureFacts, Algorithm, Detection
 │       ├── main/java/com/vizard/examples/   ExampleCatalog
 │       ├── main/resources/examples/         index.json + one .java file per example
 │       ├── main/resources/application.properties
 │       └── test/java/com/vizard/   execution/ExecutionServiceTest, TraceServiceTest, InsightTest,
 │                                   StatisticsTest, CollectionsTest, StructureStatisticsTest,
-│                                   GraphTraceTest, SearchTraceTest, insight/CodeModelBuilderTest,
-│                                   insight/GraphModelBuilderTest, BacktrackModelBuilderTest,
+│                                   GraphTraceTest, SearchTraceTest, DpTraceTest,
+│                                   insight/CodeModelBuilderTest, insight/GraphModelBuilderTest,
+│                                   BacktrackModelBuilderTest, DpModelBuilderTest,
 │                                   trace/NodeShapeTest, algorithms/AlgorithmDetectorTest,
 │                                   StructureAlgorithmsTest, GraphAlgorithmsTest,
-│                                   BacktrackAlgorithmsTest, examples/ExamplesTest
+│                                   BacktrackAlgorithmsTest, DpAlgorithmsTest, examples/ExamplesTest
 └── frontend/                       Plain HTML/CSS/JS, served by the backend
     ├── index.html
     ├── css/styles.css
@@ -379,7 +441,8 @@ vizard/
         └── visualizations/  VisualizationPanel, ArrayVisualizer (SVG), StructureVisualizer,
                              StackVisualizer, QueueVisualizer, HeapVisualizer, MapVisualizer,
                              LinkedListVisualizer, TreeVisualizer, GraphVisualizer,
-                             SearchTreeVisualizer, BoardVisualizer, InsightStrip, StatsBar,
+                             SearchTreeVisualizer, BoardVisualizer, DpTableVisualizer,
+                             InsightStrip, StatsBar,
                              ComplexityPanel, CallStackVisualizer, VariableVisualizer,
                              visible.js, svg.js
 ```
@@ -490,8 +553,19 @@ and `"loopBackTo": 5` when stopped on a loop's closing brace. Each step also has
            "methodCalls": 0, "maxDepth": 1, "loopIterations": 2 }
 ```
 
-(plus the collection counters, `verticesVisited`, `edgesExamined`, `relaxations`, and for
-backtracking `nodesExplored`, `branchesPruned`, `solutionsFound`, `backtracks`). When the program
+(plus the collection counters, `verticesVisited`, `edgesExamined`, `relaxations`, for
+backtracking `nodesExplored`, `branchesPruned`, `solutionsFound`, `backtracks`, and for dynamic
+programming `cellsFilled`, `memoHits`, `repeatedCalls`). On a line that uses a DP table, `insight.dp`
+says what it computes:
+
+```json
+"dp": { "table": "dp", "ref": 63, "cell": [3, 5], "reads": [[3, 5], [2, 1]], "label": "dp[i][w]",
+        "formula": "Math.max(dp[i][w], dp[i - 1][w - wt[i - 1]] + val[i - 1])",
+        "values": "max(35, 15 + 30)", "result": "45", "write": true }
+```
+
+and `analysis.dpTables` lists each table with its size, labels and fill order
+(`{ "row": 3, "col": 5, "step": 74 }`, one entry per write). When the program
 has a graph, `insight.graph` describes it at that step:
 
 ```json
@@ -617,7 +691,11 @@ Not allowed: file I/O, network, processes, threads, reflection, `System.exit`, n
 - Rejected choices are shown when the check is an `if` around the recursive call or an
   `if (...) continue;` before it, and its result is known (a method call such as `isSafe(...)`, or
   values Vizard can evaluate).
-- Algorithm recognition covers the textbook shapes of twenty-three algorithms. Unusual implementations
+- DP tables are found when the method creates the array it fills; a table created in `main` and filled
+  in another method, or filled by recursion without a memo check, is shown as a plain array. Tables up to
+  600 cells are drawn as a table. Only arrays get the table view; a `HashMap` memo still gets the
+  recursion tree.
+- Algorithm recognition covers the textbook shapes of thirty-three algorithms. Unusual implementations
   (e.g. a three-way quick sort, or merge sort without a separate merge loop) may not be recognised,
   in which case no complexity is claimed. Counts stay exact either way.
 - Comparisons are counted per evaluated condition, so `if (a[i] > x && a[i] < y)` counts once.

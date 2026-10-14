@@ -57,7 +57,8 @@ public final class AlgorithmDetector {
             if (m.getBody().isEmpty()) {
                 continue;
             }
-            Optional<Detection> d = GraphAlgorithms.detect(m, cu)
+            Optional<Detection> d = DpAlgorithms.detect(m, cu)
+                    .or(() -> GraphAlgorithms.detect(m, cu))
                     .or(() -> BacktrackAlgorithms.detect(m, cu))
                     .or(() -> StructureAlgorithms.detect(m, nodeClasses))
                     .or(() -> mergeSort(m, methodsByName))

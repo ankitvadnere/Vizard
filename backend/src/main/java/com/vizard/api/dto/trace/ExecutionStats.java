@@ -27,6 +27,9 @@ package com.vizard.api.dto.trace;
  * @param branchesPruned choices rejected by the check before a call, plus calls stopped by a bound check
  * @param solutionsFound nodes where a solution was recorded (printed, counted, stored or returned true)
  * @param backtracks     returns from a call to the level above, where the choice is undone
+ * @param cellsFilled    distinct cells of DP tables (and memo tables) given a value
+ * @param memoHits       calls answered from the memo without computing again
+ * @param repeatedCalls  plain recursion: calls with arguments that were already computed (wasted work)
  */
 public record ExecutionStats(
         int steps,
@@ -50,6 +53,9 @@ public record ExecutionStats(
         int nodesExplored,
         int branchesPruned,
         int solutionsFound,
-        int backtracks
+        int backtracks,
+        int cellsFilled,
+        int memoHits,
+        int repeatedCalls
 ) {
 }

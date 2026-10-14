@@ -181,6 +181,13 @@ public final class AlgorithmCatalog {
                 bound = costs.bound();
                 measures = costs.measures();
             }
+            case FIBONACCI_NAIVE, FIBONACCI_MEMO, FIBONACCI_TABLE, KNAPSACK, LCS, EDIT_DISTANCE, COIN_CHANGE,
+                 MATRIX_CHAIN, DP_MEMO, DP_TABLE -> {
+                DpCosts costs = DpCosts.of(d, facts.of(d.method()));
+                complexity = costs.complexity();
+                bound = null;
+                measures = costs.measures();
+            }
             default -> throw new IllegalStateException("Unknown algorithm " + d.algorithm());
         }
 

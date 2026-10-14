@@ -12,6 +12,8 @@ import java.util.Map;
  * @param methods     methods and constructors with their line ranges and pointer variables
  * @param graphs      graph traversals: one per loop over a vertex's neighbours
  * @param searches    backtracking searches: one per recursive method with the choose → recurse → undo shape
+ * @param tables      dynamic-programming tables (dp[] filled bottom-up, or a memo[] filled top-down)
+ * @param recursions  recursive methods drawn as recursion trees: memoised ones and plain overlapping recursion
  */
 public record CodeModel(
         Map<Integer, List<ConditionSite>> conditions,
@@ -19,16 +21,18 @@ public record CodeModel(
         Map<Integer, List<ArrayAccessSite>> accesses,
         List<MethodSite> methods,
         List<GraphSpec> graphs,
-        List<SearchSpec> searches
+        List<SearchSpec> searches,
+        List<TableSpec> tables,
+        List<RecursionSpec> recursions
 ) {
 
     public CodeModel(Map<Integer, List<ConditionSite>> conditions, List<LoopSite> loops,
                      Map<Integer, List<ArrayAccessSite>> accesses, List<MethodSite> methods) {
-        this(conditions, loops, accesses, methods, List.of(), List.of());
+        this(conditions, loops, accesses, methods, List.of(), List.of(), List.of(), List.of());
     }
 
     public static CodeModel empty() {
-        return new CodeModel(Map.of(), List.of(), Map.of(), List.of(), List.of(), List.of());
+        return new CodeModel(Map.of(), List.of(), Map.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     /**
@@ -178,6 +182,61 @@ public record CodeModel(
                              List<Integer> rejectIfFalse, List<Integer> rejectIfTrue, List<Integer> callLines,
                              Expr item, int includeLine, List<Integer> undoLines, String assignment,
                              String assignmentShape, List<String> stateNames) {
+
+        boolean methodContains(int line) {
+            return line >= methodStart && line <= methodEnd;
+        }
+    }
+
+    /**
+     * A dynamic-programming table, found by {@link DpModelBuilder}.
+     *
+     * @param kind     "tabulation" (filled by loops from earlier cells) or "memo" (filled by a recursive method)
+     * @param problem  "fibonacci", "knapsack", "lcs", "edit-distance", "coin-change", "matrix-chain" or "dp"
+     * @param table    the array: dp, memo
+     * @param dims     1 or 2
+     * @param sites    lines that read or write the table, with what to show there
+     * @param rowVar   the variable indexing rows (i), or null; for a 1-D table null
+     * @param colVar   the variable indexing columns (w, j; the only index of a 1-D table), or null
+     * @param rowString string whose letters label the rows (LCS: a), with {@code rowOffset} (charAt(i - 1) → 1)
+     * @param colString string whose letters label the columns, with {@code colOffset}
+     * @param loopDepth loops around the recurrence (work per cell = the innermost extra loop, e.g. k)
+     */
+    public record TableSpec(String method, int methodStart, int methodEnd, String kind, String problem, String table,
+                            int dims, List<TableSite> sites, String rowVar, String colVar, String rowString,
+                            int rowOffset, String colString, int colOffset, int loopDepth) {
+
+        boolean methodContains(int line) {
+            return line >= methodStart && line <= methodEnd;
+        }
+    }
+
+    /**
+     * A line that uses the table.
+     *
+     * @param cell   the cell this line is working on: what it writes, or (for a read-only line such as
+     *               {@code int cost = dp[i][k] + ...}) the cell the recurrence is computing
+     * @param write  the line assigns the cell
+     * @param label  what is computed: "dp[i][w]", "cost", or "check" for a condition
+     * @param shown  the expression as written: the right-hand side, initializer or condition
+     * @param reads  reads of the table in it (dp[i - 1][w]...)
+     * @param values other array elements in it to show with their values (val[i - 1], wt[i - 1])
+     * @param names  plain variables in it to show with their values (cost, a, j)
+     */
+    public record TableSite(int line, Expr cell, boolean write, String label, String shown, List<Expr> reads,
+                            List<Expr> values, List<String> names) {
+    }
+
+    /**
+     * A recursive method drawn as a recursion tree.
+     *
+     * @param memo       the memo table, or null for plain recursion (then repeated calls are wasted work)
+     * @param checkStart first line of the memo check ({@code if (memo[n] != -1) return memo[n];}), 0 if none
+     * @param checkEnd   last line of it
+     * @param problem    "fibonacci", "knapsack", "lcs", "edit-distance", "coin-change" or "dp"
+     */
+    public record RecursionSpec(String method, int methodStart, int methodEnd, String memo, int checkStart,
+                                int checkEnd, String problem) {
 
         boolean methodContains(int line) {
             return line >= methodStart && line <= methodEnd;

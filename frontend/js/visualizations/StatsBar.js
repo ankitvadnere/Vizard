@@ -24,6 +24,9 @@ const COUNTERS = [
     ["branchesPruned", "Pruned", "Choices rejected by the check, plus calls cut short by a bound check"],
     ["solutionsFound", "Solutions", "Nodes where a solution was printed, counted, stored or returned"],
     ["backtracks", "Backtracks", "Returns to the level above, where the choice is undone"],
+    ["cellsFilled", "Cells filled", "Distinct cells of DP or memo tables given a value"],
+    ["memoHits", "Memo hits", "Calls answered from the memo instead of being computed again"],
+    ["repeatedCalls", "Repeated calls", "Plain recursion: calls whose arguments were already computed (wasted work)"],
 ];
 const MIN_SHOWN = ["comparisons", "swaps", "loopIterations"];
 

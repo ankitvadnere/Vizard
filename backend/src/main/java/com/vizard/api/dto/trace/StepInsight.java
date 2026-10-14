@@ -15,6 +15,7 @@ import java.util.List;
  * @param ranges    the part of an array the current method works on (low..high), if recognisable
  * @param loopBackTo when stopped on a loop's closing brace: the header line it jumps back to, else null
  * @param graph     the graph being traversed and the traversal's state, if the program has one
+ * @param dp        what this line does with a dynamic-programming table, if it uses one
  */
 public record StepInsight(
         ConditionInsight condition,
@@ -25,6 +26,7 @@ public record StepInsight(
         List<LoopInsight> loops,
         List<RangeInsight> ranges,
         Integer loopBackTo,
-        GraphInsight graph
+        GraphInsight graph,
+        DpInsight dp
 ) {
 }

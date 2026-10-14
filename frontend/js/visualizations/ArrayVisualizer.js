@@ -21,9 +21,10 @@ export class ArrayVisualizer {
     }
 
     /** Draws the arrays and returns how many there were. */
-    render(step, { animate }) {
+    /** @param skip heap ids drawn elsewhere (a DP table has its own view) */
+    render(step, { animate, skip = new Set() }) {
         this.container.replaceChildren();
-        const arrays = visibleArrays(step);
+        const arrays = visibleArrays(step).filter((e) => !skip.has(e.object.id));
         const insight = step.insight ?? {};
         for (const entry of arrays) {
             const block = isMatrix(entry.object, step.heap)

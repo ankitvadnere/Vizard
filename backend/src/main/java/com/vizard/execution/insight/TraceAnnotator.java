@@ -1,5 +1,6 @@
 package com.vizard.execution.insight;
 
+import com.vizard.api.dto.analysis.DpTable;
 import com.vizard.api.dto.analysis.SearchTree;
 import com.vizard.api.dto.trace.ArrayAccessInsight;
 import com.vizard.api.dto.trace.ArrayChangeInsight;
@@ -50,7 +51,7 @@ public final class TraceAnnotator {
     }
 
     /** The annotated steps and the state-space trees of the run's backtracking searches. */
-    public record Annotated(List<TraceStep> steps, List<SearchTree> searchTrees) {
+    public record Annotated(List<TraceStep> steps, List<SearchTree> searchTrees, List<DpTable> dpTables) {
     }
 
     public static List<TraceStep> annotate(List<TraceStep> steps, CodeModel model) {
@@ -64,6 +65,8 @@ public final class TraceAnnotator {
         StatsCounter stats = new StatsCounter();
         GraphTracker graphs = new GraphTracker(steps, model.graphs());
         SearchTracker searches = new SearchTracker(steps, model.searches());
+        DpTracker tables = new DpTracker(steps, model.tables());
+        RecursionTracker recursions = new RecursionTracker(steps, model.recursions());
 
         for (int k = 0; k < steps.size(); k++) {
             TraceStep step = steps.get(k);
@@ -110,7 +113,8 @@ public final class TraceAnnotator {
                     loops,
                     ranges(model, step, here),
                     loopBackTo(model, step),
-                    graphs.active() ? graphs.track(k) : null);
+                    graphs.active() ? graphs.track(k) : null,
+                    tables.active() ? tables.insight(k, conditionInsight, next[k]) : null);
 
             // One-line loops have no iteration counter; each true check of their condition starts one.
             if (conditionInsight != null && Boolean.TRUE.equals(conditionInsight.result())
@@ -136,9 +140,17 @@ public final class TraceAnnotator {
                 stats.solutionsFound += searches.newSolutions;
                 stats.backtracks += searches.newBacktracks;
             }
+            stats.cellsFilled += tables.active() ? tables.newCells : 0;
+            if (recursions.active()) {
+                recursions.track(k);
+                stats.memoHits += recursions.newHits;
+                stats.repeatedCalls += recursions.newRepeats;
+            }
             out.add(step.withAnnotations(insight, stats.snapshot(k, step)));
         }
-        return new Annotated(out, searches.trees());
+        List<SearchTree> trees = new ArrayList<>(searches.trees());
+        trees.addAll(recursions.trees());
+        return new Annotated(out, trees, tables.tables());
     }
 
     /**
@@ -185,6 +197,9 @@ public final class TraceAnnotator {
         int branchesPruned;
         int solutionsFound;
         int backtracks;
+        int cellsFilled;
+        int memoHits;
+        int repeatedCalls;
         final Map<String, Integer> structureOps = new HashMap<>();
 
         void count(List<TraceStep> steps, int k, StepInsight insight, int iterationsStarted, boolean comparesValues) {
@@ -247,7 +262,8 @@ public final class TraceAnnotator {
             return new ExecutionStats(k + 1, comparisons, swaps, reads, writes, calls,
                     Math.max(maxDepth, step.depth()), iterations, op("push"), op("pop"), op("enqueue"),
                     op("dequeue"), op("insert"), op("remove"), op("lookup"), verticesVisited, edgesExamined,
-                    relaxations, nodesExplored, branchesPruned, solutionsFound, backtracks);
+                    relaxations, nodesExplored, branchesPruned, solutionsFound, backtracks, cellsFilled, memoHits,
+                    repeatedCalls);
         }
 
         private int op(String kind) {

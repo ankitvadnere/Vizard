@@ -10,7 +10,8 @@ import java.util.List;
  *
  * @param method          the recursive method
  * @param problem         "n-queens", "permutations", "subsets", "graph-coloring" or "backtracking"
- * @param kind            "loop" (one branch per choice) or "binary" (take / leave an element)
+ * @param kind            "loop" (one branch per choice) or "binary" (take / leave an element) for backtracking;
+ *                        "memo" or "recursion" for the recursion tree of a memoised or plain recursive method
  * @param depthVariable   what a level of the tree stands for (row, v, i), or null
  * @param choiceVariable  what a branch chooses (col, c, i), or null for "binary"
  * @param assignment      the array the choices are written to (board, color), or null

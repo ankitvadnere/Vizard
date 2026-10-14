@@ -100,7 +100,7 @@ public final class CodeModelBuilder {
         }
 
         return new CodeModel(conditions, loops, accesses, methods, GraphModelBuilder.build(cu),
-                BacktrackModelBuilder.build(cu));
+                BacktrackModelBuilder.build(cu), DpModelBuilder.tables(cu), DpModelBuilder.recursions(cu));
     }
 
     // ---------- pointer variables -------------------------------------------------------

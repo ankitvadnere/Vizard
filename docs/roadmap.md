@@ -1,6 +1,6 @@
 # Vizard roadmap
 
-Updated after Milestone 7. The original brief planned seven milestones; this version adds
+Updated after Milestone 8. The original brief planned seven milestones; this version adds
 backtracking, dynamic programming and branch and bound, the core design paradigms of a DAA
 course, each with its own visualization and complexity analysis.
 
@@ -15,6 +15,7 @@ course, each with its own visualization and complexity analysis.
 | 5. Data structures | Collection contents and operations; stacks, queues, heaps, maps, sets, linked lists and trees drawn; BST, traversal and reversal recognition with measured tree height; cost of each collection call |
 | 6. Graphs | Graphs found by their neighbour loop (lists, maps, matrices, weighted edges); drawn with current vertex, frontier, visited set, examined edge, recursion path, distances and the BFS/DFS/shortest-path tree; BFS, DFS (recursive and iterative) and Dijkstra (heap and array) recognised with the representation deciding the complexity; vertices visited, edges examined and relaxations counted |
 | 7. Backtracking | Choose → check → recurse → undo recognised (N-Queens, permutations, subsets / subset sum, graph colouring, any other search); the state-space tree drawn as it grows with rejected, cut, dead-end and solution nodes; N-Queens board and coloured graph views; nodes explored vs the full tree; step over / step out |
+| 8. Dynamic programming | Tabulation and memoisation recognised (Fibonacci, 0/1 knapsack, LCS, edit distance, coin change, matrix chain, any other table or memo) and plain overlapping recursion; DP tables filled cell by cell with the cells read and the recurrence's values; recursion trees with memo hits and repeated calls; Fibonacci three ways side by side |
 
 ## Principles for every remaining milestone
 
@@ -88,7 +89,10 @@ Milestone 6 graph.
 - **Step over / step out**: new playback controls to skip a whole recursive call, needed once
   traces are hundreds of steps long.
 
-## Milestone 8 — Dynamic programming
+## Milestone 8 — Dynamic programming (done)
+
+Delivered as planned. The bound meter is replaced by measured facts for DP (table size, cells filled,
+calls, memo hits, repeated calls), because cells filled, not a worst case, is what the table shows.
 
 - **Recognition**
   - Memoisation: a recursive method that checks a memo array/map before computing and stores the

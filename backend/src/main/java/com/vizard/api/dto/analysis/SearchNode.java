@@ -10,8 +10,10 @@ package com.vizard.api.dto.analysis;
  * @param choice      the choice in words: "col = 2", "take a[i] = 3"
  * @param firstStep   step at which the call starts (or the choice is rejected)
  * @param endStep     last step during which the call is running; -1 if it never returned
- * @param kind        "explored" (had children), "solution", "dead-end" (a leaf that is no solution),
- *                    "pruned" (stopped by a bound check), "rejected" (the check said no; never called)
+ * @param kind        backtracking: "explored" (had children), "solution", "dead-end" (a leaf that is no
+ *                    solution), "pruned" (stopped by a bound check), "rejected" (the check said no; never called);
+ *                    recursion trees: "computed", "base" (answered directly), "hit" (answered from the memo),
+ *                    "repeat" (plain recursion: these arguments were already computed once)
  * @param kindStep    step from which the kind is known (a solution as soon as it is recorded,
  *                    a dead end once its call returns)
  */

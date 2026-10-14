@@ -102,7 +102,9 @@ class AlgorithmDetectorTest {
                                 if (g[i][j] == 0) g[i][j] = i * j;
                     }
                 }
-                """)).isEmpty();
+                """)).extracting(d -> d.algorithm())
+                // Since Milestone 8 plain recursive Fibonacci is recognised (O(2ⁿ)); nothing else here is anything.
+                .containsExactly(Algorithm.FIBONACCI_NAIVE);
     }
 
     @Test
