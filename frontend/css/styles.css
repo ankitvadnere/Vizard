@@ -621,7 +621,16 @@ body:not(.viz-focus) .step-code { display: none; }
 }
 .algo-card header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .algo-card h3, .algo-card h4 { margin: 0; font-size: 15px; }
-.structures-used { display: flex; flex-direction: column; gap: 10px; }
+.structures-used, .estimates { display: flex; flex-direction: column; gap: 10px; }
+.estimates > h3 { margin: 4px 0 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+.algo-card.estimate-card { border: 1px dashed var(--line); }
+.algo-tag.estimate-tag { border-color: var(--amber); color: var(--amber); }
+.recurrence { margin: 0; font-size: 13px; color: var(--muted); }
+.recurrence code { font: 600 13px var(--font-code); color: var(--text); }
+.estimate-legend { margin: 0; font: 12px var(--font-code); color: var(--muted); }
+.estimate-steps { margin: 4px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.estimate-steps li { list-style: none; position: relative; }
+.estimate-steps li::before { content: "›"; position: absolute; left: -12px; color: var(--muted); }
 .structures-used > h3 { margin: 4px 0 0; font-size: 13px; color: var(--muted); font-weight: 600; }
 .cost-table { border-collapse: collapse; font-size: 13px; width: 100%; }
 .cost-table th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; padding: 0 8px 4px 0; }
@@ -774,3 +783,56 @@ body:not(.viz-focus) .step-code { display: none; }
     .search-svg .search-node.new circle, .search-svg .search-node.new rect { animation: none; }
     .dp-svg .dp-cell.fresh rect { animation: none; }
 }
+
+/* ---- Growth check (Milestone 10) ---- */
+.growth { display: flex; flex-direction: column; gap: 8px; }
+.growth > h3 { margin: 4px 0 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+.growth-button { align-self: flex-start; }
+.growth-result { display: flex; flex-direction: column; gap: 8px; }
+.growth-verdict { margin: 0; font-size: 13.5px; }
+.growth-verdict strong { font-family: var(--font-code); }
+.growth-note { margin: 0; font-size: 12.5px; color: var(--muted); }
+.growth-figure { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.growth-svg { width: 100%; height: auto; max-width: 560px; background: var(--panel); border-radius: var(--radius-control); }
+.growth-grid { stroke: var(--line); stroke-width: 1; opacity: 0.6; }
+.growth-tick { fill: var(--muted); font: 10.5px var(--font-code); dominant-baseline: central; }
+.growth-axis { fill: var(--muted); font-size: 11px; }
+.growth-fit { fill: none; stroke: #7aa7e0; stroke-width: 2; }
+.growth-second { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.7; }
+.growth-point .dot { fill: var(--amber); stroke: var(--panel); stroke-width: 2; }
+.growth-point .hit { fill: transparent; }
+.growth-point:hover .dot, .growth-point:focus-visible .dot { r: 6; }
+.growth-point:focus-visible { outline: none; }
+.swatch.growth-swatch-dot { background: var(--amber); border-radius: 50%; border: 0; }
+.swatch.growth-swatch-fit { height: 0; border: 0; border-top: 2px solid #7aa7e0; border-radius: 0; }
+.swatch.growth-swatch-second { height: 0; border: 0; border-top: 2px dashed var(--muted); border-radius: 0; }
+
+/* ---- Keyboard shortcuts panel ---- */
+.button.icon-only { width: 34px; padding: 0; justify-content: center; font-weight: 700; }
+.shortcuts-dialog {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    padding: 16px 20px;
+    width: min(520px, calc(100vw - 32px));
+}
+.shortcuts-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+.shortcuts-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.shortcuts-dialog h2 { margin: 0; font-size: 16px; }
+.shortcuts { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+.shortcuts th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 10px 0 4px; }
+.shortcuts td { padding: 4px 0; border-top: 1px solid var(--line); }
+.shortcuts td:first-child { white-space: nowrap; padding-right: 16px; }
+kbd {
+    display: inline-block;
+    min-width: 1.6em;
+    padding: 1px 6px;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--raised);
+    font: 12px var(--font-code);
+    text-align: center;
+}
+.shortcuts-note { margin: 12px 0 0; color: var(--muted); font-size: 12px; }

@@ -2,6 +2,7 @@ package com.vizard.api;
 
 import com.vizard.api.dto.ExecuteRequest;
 import com.vizard.api.dto.ExecutionResponse;
+import com.vizard.api.dto.growth.GrowthResponse;
 import com.vizard.api.dto.trace.TraceResponse;
 import com.vizard.execution.ExecutionService;
 import jakarta.validation.Valid;
@@ -33,6 +34,12 @@ public class ExecutionController {
     @PostMapping("/trace")
     public TraceResponse trace(@Valid @RequestBody ExecuteRequest request) {
         return executionService.trace(request.code(), request.stdin());
+    }
+
+    /** Runs the program at growing input sizes and fits the operation counts to n, n log n, n², 2ⁿ... */
+    @PostMapping("/growth")
+    public GrowthResponse growth(@Valid @RequestBody ExecuteRequest request) {
+        return executionService.growth(request.code(), request.stdin());
     }
 
     /** Lets the frontend check the backend is up. */

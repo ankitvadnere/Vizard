@@ -51,6 +51,18 @@ export async function traceCode(code, stdin) {
     }
 }
 
+/** Runs the program at growing input sizes and fits the counts. Resolves to a GrowthResponse. */
+export async function measureGrowth(code, stdin) {
+    try {
+        const r = await post("/growth", { code, stdin });
+        if (!r.execution) return { execution: r, points: [], fits: [], reason: r.message ?? "The request was rejected." };
+        return r;
+    } catch {
+        return { execution: unreachable("Could not reach the Vizard backend. Is it running?"), points: [], fits: [],
+            reason: "Could not reach the Vizard backend. Is it running?" };
+    }
+}
+
 /** The example programs, grouped for the menu. Resolves to [] if the backend is unreachable. */
 export async function fetchExamples() {
     try {

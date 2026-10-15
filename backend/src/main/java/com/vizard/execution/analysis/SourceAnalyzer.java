@@ -36,8 +36,11 @@ public class SourceAnalyzer {
 
     public SourceAnalysis analyze(String source) {
         // JavaParser instances are not thread-safe, so create one per request (cheap).
+        // Unicode escapes are decoded first, as javac does, so "\\u0052untime" is seen as Runtime
+        // by the safety policy instead of slipping past it.
         JavaParser parser = new JavaParser(new ParserConfiguration()
-                .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17));
+                .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17)
+                .setPreprocessUnicodeEscapes(true));
         ParseResult<CompilationUnit> result = parser.parse(source);
 
         if (!result.isSuccessful() || result.getResult().isEmpty()) {

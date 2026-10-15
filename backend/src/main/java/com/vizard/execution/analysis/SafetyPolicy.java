@@ -65,6 +65,10 @@ public class SafetyPolicy {
             "getDeclaredConstructors", "getMethod", "getMethods", "getField", "getFields",
             "getConstructor", "getConstructors", "setAccessible", "newInstance", "loadLibrary");
 
+    /** Stream methods that run work on other threads (the fork/join common pool). */
+    private static final Set<String> THREAD_METHODS = Set.of("parallelStream", "parallel", "parallelSetAll",
+            "parallelSort", "parallelPrefix");
+
     /** System.xxx(...) calls that are not allowed. System.out / System.in stay available. */
     private static final Set<String> FORBIDDEN_SYSTEM_METHODS = Set.of(
             "exit", "getenv", "getProperty", "getProperties", "setProperty", "setProperties",
@@ -113,6 +117,10 @@ public class SafetyPolicy {
             String method = call.getNameAsString();
             if (REFLECTION_METHODS.contains(method)) {
                 add(found, call, "Detected: Reflection. '" + method + "(...)' is not supported by Vizard.");
+            }
+            if (THREAD_METHODS.contains(method)) {
+                add(found, call, "Detected: Threads. '" + method + "(...)' runs on several threads, which Vizard "
+                        + "does not support.");
             }
             boolean onSystem = call.getScope().map(s -> s.toString().equals("System")).orElse(false);
             if (onSystem && FORBIDDEN_SYSTEM_METHODS.contains(method)) {

@@ -18,6 +18,7 @@ import java.util.Set;
  * @param algorithms       algorithms recognised in the source (tracing only, else empty)
  * @param collectionCallLines lines that call push/poll/put/... (tracing only), where the debugger
  *                         watches collection operations
+ * @param estimates        static complexity estimates for methods that are not recognised (tracing only)
  */
 public record PreparedProgram(
         Path classesDir,
@@ -29,6 +30,7 @@ public record PreparedProgram(
         long compileTimeMs,
         CodeModel codeModel,
         List<Detection> algorithms,
-        Set<Integer> collectionCallLines
+        Set<Integer> collectionCallLines,
+        List<com.vizard.api.dto.analysis.ComplexityEstimate> estimates
 ) {
 }

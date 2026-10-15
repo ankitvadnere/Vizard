@@ -1,6 +1,6 @@
 # Vizard roadmap
 
-Updated after Milestone 8. The original brief planned seven milestones; this version adds
+Final, after Milestone 10. The original brief planned seven milestones; this version adds
 backtracking, dynamic programming and branch and bound, the core design paradigms of a DAA
 course, each with its own visualization and complexity analysis.
 
@@ -16,6 +16,8 @@ course, each with its own visualization and complexity analysis.
 | 6. Graphs | Graphs found by their neighbour loop (lists, maps, matrices, weighted edges); drawn with current vertex, frontier, visited set, examined edge, recursion path, distances and the BFS/DFS/shortest-path tree; BFS, DFS (recursive and iterative) and Dijkstra (heap and array) recognised with the representation deciding the complexity; vertices visited, edges examined and relaxations counted |
 | 7. Backtracking | Choose → check → recurse → undo recognised (N-Queens, permutations, subsets / subset sum, graph colouring, any other search); the state-space tree drawn as it grows with rejected, cut, dead-end and solution nodes; N-Queens board and coloured graph views; nodes explored vs the full tree; step over / step out |
 | 8. Dynamic programming | Tabulation and memoisation recognised (Fibonacci, 0/1 knapsack, LCS, edit distance, coin change, matrix chain, any other table or memo) and plain overlapping recursion; DP tables filled cell by cell with the cells read and the recurrence's values; recursion trees with memo hits and repeated calls; Fibonacci three ways side by side |
+| 9. Branch and bound | Live-node searches (best-first, FIFO, LIFO) and depth-first searches with a best-so-far bound recognised: 0/1 knapsack, TSP, job assignment, any other; branch-and-bound tree with live, expanded and pruned nodes, bounds, the live list and best updates; TSP with and without the bound side by side |
+| 10. Complexity of any code, polish | Static estimates for unrecognised methods (loop bounds, nesting, calls, library costs, recurrences solved by unrolling or the master theorem, with reasoning); growth measurement at increasing input sizes with curve fitting; keyboard-shortcut panel; security hardening (Unicode escapes, parallel streams); full documentation and demo script |
 
 ## Principles for every remaining milestone
 
@@ -23,8 +25,9 @@ These come from what Milestones 1–4 taught us, including the N-Queens misdetec
 
 1. **Visualize from execution data only.** Every picture is drawn from the recorded trace; nothing is
    simulated in the browser.
-2. **Recognise by structure, report with evidence.** A complexity is shown only for an algorithm
-   Vizard identified, together with the reasons. Unknown code gets exact counts and no Big-O claim.
+2. **Recognise by structure, report with evidence.** A textbook complexity is shown only for an
+   algorithm Vizard identified, together with the reasons. Other code gets exact counts and, since
+   Milestone 10, an estimate that is labelled as one and shows its reasoning.
 3. **Never report a part as the whole.** A helper inside an unrecognised algorithm is not reported on
    its own (the N-Queens `isSafe()` lesson).
 4. **Every recogniser ships with look-alike tests**: programs that resemble the pattern but are not it.
@@ -122,7 +125,7 @@ Builds on the state-space tree (Milestone 7) and `PriorityQueue` visibility (Mil
 - **Complexity**: worst case O(2ⁿ) for knapsack, O(n!) for TSP, shown next to the nodes actually
   explored, plus a side-by-side comparison with the backtracking version of the same problem.
 
-## Milestone 10 — Complexity of unrecognised code, polish, documentation
+## Milestone 10 — Complexity of unrecognised code, polish, documentation (done)
 
 - **Static estimate for unrecognised code**, clearly labelled as an estimate with its reasoning:
   loop nesting over the input size, halving loops (log n), simple recurrences

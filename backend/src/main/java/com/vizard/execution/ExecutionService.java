@@ -3,6 +3,12 @@ package com.vizard.execution;
 import com.vizard.api.dto.ExecutionResponse;
 import com.vizard.api.dto.ExecutionStatus;
 import com.vizard.api.dto.SourceProblem;
+import com.vizard.api.dto.analysis.ComplexityEstimate;
+import com.vizard.api.dto.growth.GrowthPoint;
+import com.vizard.api.dto.growth.GrowthResponse;
+import com.vizard.execution.growth.GrowthFitter;
+import com.vizard.execution.growth.GrowthInstrumenter;
+import com.vizard.execution.estimate.ComplexityEstimator;
 import com.vizard.api.dto.trace.TraceResponse;
 import com.vizard.config.ExecutionProperties;
 import com.vizard.execution.analysis.SourceAnalysis;
@@ -102,6 +108,129 @@ public class ExecutionService {
                 props.maxTraceSteps()));
     }
 
+    /** Largest input size tried; the series also stops at the operation limit or the time budget. */
+    private static final int MAX_GROWTH_SIZE = 1 << 14;
+    private static final long GROWTH_BUDGET_MS = 25_000;
+
+    /**
+     * Runs the program at growing input sizes and counts its operations (loop iterations and calls of
+     * its own methods), to compare the measured growth with n, n log n, n², 2ⁿ...
+     */
+    public GrowthResponse growth(String code, String stdin) {
+        return inWorkspace(workspace -> {
+            Preparation prep = prepare(code, workspace, false);
+            if (prep.failure() != null) {
+                return GrowthResponse.failed(prep.failure(), null);
+            }
+            SourceAnalysis analysis = analyzer.analyze(code);
+            GrowthInstrumenter.Outcome outcome = GrowthInstrumenter.instrument(analysis.compilationUnit(),
+                    analysis.mainClassName());
+            ExecutionResponse compiledOk = new ExecutionResponse(ExecutionStatus.SUCCESS, true, "Compiled.", "", "",
+                    null, prep.program().compileTimeMs(), 0, List.of(), null);
+            if (outcome.plan() == null) {
+                return GrowthResponse.failed(compiledOk, outcome.reason());
+            }
+            Path src = Files.createDirectories(workspace.resolve("growth-src"));
+            Path classes = Files.createDirectories(workspace.resolve("growth-classes"));
+            Path file = src.resolve(prep.program().sourceFileName());
+            Files.writeString(file, outcome.plan().source(), StandardCharsets.UTF_8);
+            CompilationResult compiled = compiler.compile(file, classes);
+            if (!compiled.success()) {
+                log.warn("Instrumented program did not compile: {}", compiled.problems());
+                return GrowthResponse.failed(compiledOk, "Vizard could not prepare this program for measuring.");
+            }
+            return measure(outcome.plan(), classes, prep.program(), stdin == null ? "" : stdin, compiledOk);
+        }, (status, message) -> GrowthResponse.failed(ExecutionResponse.of(status, message), message));
+    }
+
+    private GrowthResponse measure(GrowthInstrumenter.Plan plan, Path classes, PreparedProgram program, String stdin,
+                                   ExecutionResponse compiledOk) {
+        List<GrowthPoint> points = new ArrayList<>();
+        long start = System.currentTimeMillis();
+        String stopped = null;
+        // Double the size while the program stays cheap; if it explodes early (2ⁿ, n!), fill in the sizes between.
+        int n = plan.kind().equals("variable") ? 2 : 4;
+        int lastGood = -1;
+        int failedAt = -1;
+        while (n <= MAX_GROWTH_SIZE) {
+            GrowthRun run = runAt(n, classes, program, stdin);
+            if (run.point() == null) {
+                stopped = run.why() + " at n = " + n;
+                failedAt = n;
+                break;
+            }
+            points.add(run.point());
+            lastGood = n;
+            if (run.point().operations() > 2_000_000 || points.size() >= 10) {
+                stopped = run.point().operations() > 2_000_000
+                        ? "stopped after " + String.format("%,d", run.point().operations()) + " operations at n = " + n
+                        : "enough sizes measured";
+                break;
+            }
+            if (System.currentTimeMillis() - start > GROWTH_BUDGET_MS) {
+                stopped = "time budget used up";
+                break;
+            }
+            n *= 2;
+        }
+        if (points.size() < 7 && points.size() >= 2) {
+            // Fast growth (2ⁿ, n!) leaves few doublings: fill in sizes between the last two that worked.
+            int from = points.get(points.size() - 2).n();
+            int to = points.get(points.size() - 1).n();
+            int step = Math.max(1, (to - from) / 4);
+            java.util.Set<Integer> have = new java.util.HashSet<>();
+            points.forEach(p -> have.add(p.n()));
+            for (int m = from + step; m < (failedAt > 0 ? failedAt : to + step) && points.size() < 10; m += step) {
+                if (have.contains(m) || System.currentTimeMillis() - start > GROWTH_BUDGET_MS) {
+                    continue;
+                }
+                GrowthRun run = runAt(m, classes, program, stdin);
+                if (run.point() == null) {
+                    stopped = run.why() + " at n = " + m;
+                    break;
+                }
+                points.add(run.point());
+                if (run.point().operations() > 4_000_000) {
+                    break;
+                }
+            }
+            points.sort(java.util.Comparator.comparingInt(GrowthPoint::n));
+        }
+        if (points.size() < 3) {
+            return new GrowthResponse(compiledOk, plan.what(), "Too few sizes could be measured ("
+                    + (stopped == null ? "the program stopped early" : stopped) + ").", points, List.of(), null, stopped);
+        }
+        return new GrowthResponse(compiledOk, plan.what(), null, points, GrowthFitter.fit(points),
+                GrowthFitter.slope(points), stopped);
+    }
+
+    private record GrowthRun(GrowthPoint point, String why) {
+    }
+
+    private GrowthRun runAt(int n, Path classes, PreparedProgram program, String stdin) {
+        SandboxResult r = sandbox.run(new SandboxRequest(classes, program.mainClassName(), program.runDir(), stdin,
+                props.timeoutMs(), List.of("-Dvizard.n=" + n)));
+        if (r.timedOut()) {
+            return new GrowthRun(null, "timed out");
+        }
+        for (String line : r.stderr().split("\\R")) {
+            if (line.startsWith("__VZ_RESULT ")) {
+                String[] parts = line.trim().split(" ");
+                long ops = Long.parseLong(parts[1]);
+                long ms = Long.parseLong(parts[2]);
+                String outcome = parts.length > 3 ? parts[3] : "ok";
+                if (outcome.equals("limit")) {
+                    return new GrowthRun(null, "more than 20,000,000 operations");
+                }
+                if (!outcome.equals("ok")) {
+                    return new GrowthRun(null, "the program stopped with " + outcome);
+                }
+                return new GrowthRun(new GrowthPoint(n, ops, ms), null);
+            }
+        }
+        return new GrowthRun(null, r.stderr().contains("OutOfMemoryError") ? "out of memory" : "the program failed");
+    }
+
     // ---------------------------------------------------------------------------------------
 
     private record Preparation(PreparedProgram program, ExecutionResponse failure) {
@@ -164,9 +293,10 @@ public class ExecutionService {
         CodeModel codeModel = forTracing ? buildCodeModel(analysis) : null;
         List<Detection> algorithms = forTracing ? detectAlgorithms(analysis) : List.of();
         Set<Integer> callLines = forTracing ? collectionCallLines(analysis) : Set.of();
+        List<ComplexityEstimate> estimates = forTracing ? estimate(analysis, algorithms) : List.of();
         return new Preparation(new PreparedProgram(classesDir, runDir, fileName, analysis.mainClassName(),
                 analysis.topLevelClasses(), launcherClass, compiled.durationMs(), codeModel, algorithms,
-                callLines), null);
+                callLines, estimates), null);
     }
 
     /** Lines with a call like st.push(x) or map.get(k): where the debugger watches collection operations. */
@@ -179,6 +309,21 @@ public class ExecutionService {
             }
         }
         return Set.copyOf(lines);
+    }
+
+    /** Estimates for the methods recognition did not name; like recognition, a bonus that never stops a trace. */
+    private static List<ComplexityEstimate> estimate(SourceAnalysis analysis, List<Detection> algorithms) {
+        try {
+            Set<String> recognised = new HashSet<>();
+            algorithms.forEach(d -> recognised.add(d.method()));
+            return ComplexityEstimator.estimate(analysis.compilationUnit(), recognised).stream()
+                    .map(e -> new ComplexityEstimate(e.method(), e.line(), e.time(), e.space(), e.recurrence(),
+                            e.rule(), e.steps(), e.legend()))
+                    .toList();
+        } catch (RuntimeException | StackOverflowError e) {
+            log.warn("Could not estimate complexity", e);
+            return List.of();
+        }
     }
 
     /** Like insights, recognition is a bonus and must never stop a trace. */

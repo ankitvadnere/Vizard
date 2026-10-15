@@ -28,8 +28,36 @@
             <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3v10l6-5z M10 3h2v10h-2z"/></svg>
             <span class="label">Step through</span>
         </button>
+        <button id="help-button" class="button secondary icon-only" type="button" title="Keyboard shortcuts (?)"
+                aria-label="Keyboard shortcuts" aria-haspopup="dialog">?</button>
     </div>
 </header>
+
+<dialog id="shortcuts-dialog" class="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <header>
+        <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+        <form method="dialog"><button class="button secondary" type="submit" aria-label="Close">Close</button></form>
+    </header>
+    <table class="shortcuts">
+        <tbody>
+        <tr><th colspan="2">Editor</th></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>Run at full speed</td></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd></td><td>Step through (record every step)</td></tr>
+        <tr><th colspan="2">Stepping (after Step through)</th></tr>
+        <tr><td><kbd>→</kbd> / <kbd>←</kbd></td><td>Next / previous step</td></tr>
+        <tr><td><kbd>Shift</kbd> + <kbd>→</kbd></td><td>Step over: skip the call on this line</td></tr>
+        <tr><td><kbd>Shift</kbd> + <kbd>↑</kbd></td><td>Step out: run to the end of this call</td></tr>
+        <tr><td><kbd>Space</kbd></td><td>Play / pause</td></tr>
+        <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>First / last step</td></tr>
+        <tr><th colspan="2">View</th></tr>
+        <tr><td><kbd>F</kbd></td><td>Full-screen visualization</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Leave full screen, close this panel</td></tr>
+        <tr><td><kbd>?</kbd></td><td>This list</td></tr>
+        </tbody>
+    </table>
+    <p class="shortcuts-note">Shortcuts other than Ctrl+Enter are ignored while you are typing in the editor.
+        Click a state-space tree node to jump to that call.</p>
+</dialog>
 
 <main class="workspace">
     <section class="pane editor-pane" aria-label="Java code">

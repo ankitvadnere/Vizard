@@ -38,5 +38,6 @@
   {"id": "matrix-chain", "title": "Matrix chain multiplication", "group": "Dynamic programming", "algorithms": ["matrix-chain"]},
   {"id": "knapsack-bnb", "title": "0/1 knapsack (best-first branch and bound)", "group": "Branch and bound", "algorithms": ["knapsack-bnb"]},
   {"id": "tsp", "title": "Travelling salesman: backtracking vs branch and bound", "group": "Branch and bound", "algorithms": ["tsp-backtracking", "tsp-bnb"]},
-  {"id": "job-assignment", "title": "Job assignment (lower bound)", "group": "Branch and bound", "algorithms": ["assignment-bnb"]}
+  {"id": "job-assignment", "title": "Job assignment (lower bound)", "group": "Branch and bound", "algorithms": ["assignment-bnb"]},
+  {"id": "estimate-demo", "title": "Your own code: estimated complexity", "group": "Complexity", "algorithms": []}
 ]

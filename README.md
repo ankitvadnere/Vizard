@@ -3,13 +3,16 @@
 Interactive Java code execution, step-by-step debugging and algorithm visualization, built as a
 Design and Analysis of Algorithms course project.
 
-> Status: **Milestone 9** — step through Java forwards and backwards and *see* it run: arrays, pointers,
-> conditions and loops; stacks, queues, priority queues, maps and sets; your own linked lists and binary
-> trees; graphs with BFS, DFS and Dijkstra traversals; backtracking as a growing state-space tree;
-> dynamic programming as a table filling cell by cell and as recursion trees with memo hits;
-> branch and bound as a tree of live, expanded and pruned nodes with the best solution so far.
-> Live operation counts, and complexity analysis for the sorting, searching, tree, list, graph,
-> backtracking, dynamic-programming and branch-and-bound algorithms taught in DAA.
+Write or pick a Java program, press **Step through**, and move forwards and backwards through its
+execution while Vizard draws what it is doing: arrays with pointers and swaps, stacks, queues, heaps,
+maps, linked lists and trees, graphs being traversed, backtracking state-space trees, dynamic
+programming tables filling cell by cell, recursion trees with memo hits, and branch-and-bound trees
+with their live nodes and bounds. Next to the picture: exact operation counts for the run, the
+textbook complexity of 39 recognised algorithms, an estimated complexity for any other code (loops,
+recurrences, the master theorem), and a growth check that runs the program at bigger and bigger inputs
+and fits the curve.
+
+> Status: **complete** (Milestones 1–10). See [docs/roadmap.md](docs/roadmap.md).
 
 ## Screenshots
 
@@ -96,665 +99,69 @@ plain backtracking on the same 5 cities.
 
 ![TSP branch and bound](docs/screenshots/tsp-bnb.png)
 
-## How it works
+Your own code: a method Vizard does not recognise gets an *estimate* read from its loops, with the
+reasoning shown step by step.
 
-```
-Browser (Monaco editor)
-   │  POST /api/execute  or  POST /api/trace   { code, stdin }
-   ▼
-Spring Boot
-   ├─ SourceAnalyzer       JavaParser → AST, find the class with main()
-   ├─ SafetyPolicy         reject files, network, threads, reflection, System.exit...
-   ├─ JavaCompilerService  javax.tools compiler, in-process, annotation processing off
-   ├─ LocalProcessSandbox  separate JVM: timeout, -Xmx, output cap, empty env & temp dir
-   ├─ RunOutcomeClassifier success / runtime error (with line) / timeout / OOM / output flood
-   └─ (trace only)
-        JdiTraceSession   the sandboxed JVM starts paused and connects to Vizard's debugger (JDI);
-                          a breakpoint on every line + method-exit watches record the full state:
-                          call stack, locals, statics, reachable arrays/objects, output so far
-        CollectionReader  ArrayList, ArrayDeque, HashMap, TreeMap, PriorityQueue... read through
-                          their internal fields (nothing runs inside the program)
-        CollectionCalls   breakpoints on the call instructions of lines that use a collection, so
-                          each push / poll / put the program makes is recorded with its arguments
-        StructureRoles    how each collection was used (an ArrayDeque fed push/pop is a stack)
-        CodeModelBuilder  AST → where conditions, loops and array accesses are; which int
-                          variables index which arrays
-        TraceAnnotator    state + code model → per-step insight: condition values and result,
-                          accessed/changed cells, swaps, pointers, loop iterations, active range,
-                          and running statistics (comparisons, swaps, reads, writes, calls, depth)
-        AlgorithmDetector AST → recognised algorithms (by structure, not by name), including
-        StructureAlgorithms BST search / insert / delete, traversals and list reversal →
-        AlgorithmCatalog  best / average / worst / space, with worst-case counts for this run's n
-                          and measured facts (tree height); StructureCosts: cost of each call made
-   ▼
-JSON → editor highlight, Variables, Call stack, Output, playback controls
-```
+![Estimated complexity](docs/screenshots/estimate.png)
 
-### Why a debugger instead of rewriting the code
+Measure growth: the same program run at n = 4 … 2048 with generated input; on log-log axes the counts
+lie on a line of slope 2, closest to n², agreeing with the estimate.
 
-Tracing uses the Java Debug Interface, the same API IntelliJ's debugger uses, rather than
-inserting `trace()` calls into the source. The user's code runs unmodified, so the recorded values
-are exactly what the JVM computed; there is no re-implementation of Java's scoping rules that
-could disagree with the compiler. The cost is speed (about 1,500 steps per second), which is why
-traces are capped. The AST from JavaParser provides the meaning on top of the state.
+![Growth check](docs/screenshots/growth.png)
 
-### How algorithms are recognised
+## Features
 
-`AlgorithmDetector` matches the defining *structure* of each algorithm in the AST; method names are
-never used. For example, bubble sort = two nested loops + an `if` comparing neighbouring elements
-`a[j]` and `a[j + 1]` + a swap inside that `if`. Recognisers exist for bubble, selection, insertion,
-merge and quick sort and for linear and binary search. Each match records its evidence in plain words
-("Compares neighbouring elements arr[j] and arr[j + 1] (line 7)"), shown in the Complexity tab.
-
-The complexity itself is a **known-algorithm mapping** (`AlgorithmCatalog`), adjusted for details
-Vizard can see: bubble sort's best case is O(n) only if it has an early-exit flag; recursive binary
-search needs O(log n) space. Code that matches nothing gets no complexity claim; Vizard does not
-pretend to derive the complexity of arbitrary code.
-
-For the input of the current run (n = length of the largest array used), the catalogue also gives
-the worst-case number of element comparisons, e.g. n(n−1)/2 = 6 for bubble sort on 4 elements,
-shown next to the live count.
-
-### How operations are counted
-
-Every step carries running totals up to that step, so stepping back rewinds them:
-
-| Counter | Counts |
+| | |
 |---|---|
-| Comparisons | evaluated conditions that compared at least one array element (`arr[j] > arr[j + 1]`, `arr[mid] == target`); short-circuited parts are not counted |
-| Swaps | two cells exchanging values, written from different lines (`a[i] = a[j]; a[j] = t;`) or a `swap()` call. Copying a temp array back in merge sort is *not* a swap |
-| Array reads / writes | element accesses by lines that ran |
-| Loop iterations | iterations started, in any loop |
-| Method calls | calls to your methods and constructors (main not counted) |
-| Max depth | deepest call stack (1 = only main) |
-| Pushes / pops | stack operations (`Stack`, or a `Deque` used through `push`/`pop`) |
-| Enqueues / dequeues | queue and priority-queue operations (`offer`/`add` at the rear, `poll`/`remove()` at the front) |
-| Inserts / removes / lookups | `add`, `put`, `set` / `remove` / `get`, `contains`, `containsKey`, `peek` on any collection |
-| Vertices visited | graph vertices visited so far (settled, for Dijkstra) |
-| Edges examined | iterations of the neighbour loop: one per edge looked at, one per cell for a matrix |
-| Relaxations | distance improvements `dist[v] = dist[u] + w` |
-| Nodes explored | calls of a backtracking method (nodes of the state-space tree) |
-| Pruned | choices rejected by the check, plus calls cut by a bound check |
-| Solutions | nodes where a solution was recorded |
-| Backtracks | returns from a call to the level above, where the choice is undone |
-| Cells filled | distinct cells of DP or memo tables given a value |
-| Memo hits | calls answered from the memo instead of being computed again |
-| Repeated calls | plain recursion: calls whose arguments were already computed (wasted work) |
+| **Run** | compile and run Java 17+ in a sandboxed JVM; output, stdin, compile errors and runtime errors mapped to your lines |
+| **Step through** | every line recorded with a debugger; step forwards/backwards, step over, step out, play; jump to any step |
+| **Data** | variables, call stack, arrays (pointers, compared/swapped/written cells, active range), collections, linked lists, binary trees |
+| **Graphs** | BFS, DFS, Dijkstra: visit order, frontier, distances, relaxed edges, shortest-path tree |
+| **Backtracking** | state-space tree with rejected choices, dead ends and solutions; chessboard for N-Queens |
+| **Dynamic programming** | tables filling with the cells each one reads; recursion trees with repeats or memo hits |
+| **Branch and bound** | live, expanded and pruned nodes with bounds; the best solution so far; best-first, FIFO, LIFO |
+| **Complexity** | 39 algorithms recognised by structure with best/average/worst/space and the worst-case count for this n; estimates for everything else; growth measurement |
+| **Counts** | comparisons, swaps, reads, writes, iterations, calls, depth, collection operations, vertices/edges, nodes, cells, memo hits, bound prunes |
+| **View** | full-screen visualization (`F`), collapsible counters, keyboard shortcuts (`?`) |
 
-Comparisons also count conditions that compare a node's value field, such as `key < root.key` in a BST;
-pointer checks like `root.left == null` are not comparisons. Only the counters a program uses are shown.
+## Quick start
 
-The counts for the examples were checked against independent implementations (for instance quick
-sort on {10, 80, 30, 90, 40, 50, 70}: 13 comparisons, 5 swaps).
-
-### How data structures are read and drawn
-
-**Collections.** `CollectionReader` reads `ArrayList`, `LinkedList`, `ArrayDeque`, `Stack`/`Vector`,
-`PriorityQueue`, `HashMap`, `LinkedHashMap`, `TreeMap`, `HashSet`, `LinkedHashSet`, `TreeSet`,
-`List.of(...)` and `Arrays.asList(...)` through their internal fields, the way a debugger's variables
-view does. Nothing is called inside the program (calling `toArray()` would run code in it). The
-elements come out in Java's own iteration order: an `ArrayDeque` from head round its circular buffer,
-a `TreeMap` by an in-order walk, a `PriorityQueue` in heap-array order.
-
-**Operations.** Watching every method entry of `HashMap` would also catch the thousands of calls the
-JDK makes internally (Scanner, string concatenation), slowing a trace ten-fold. Instead, on each line
-that calls `push`, `poll`, `put`... (known from the AST), Vizard puts a breakpoint on every call
-instruction, and from there catches only the method entered next. It is counted if a user line called
-it directly on a collection, so `HashSet.add` calling `HashMap.put` inside is one operation, not two.
-Each operation is attached to the first step recorded after it: the step where its effect is visible.
-
-**Roles.** How a collection is drawn depends on how it was *used*, decided from all its operations:
-an `ArrayDeque` that only sees `push`/`pop` is a stack (top first); fed `offer`/`poll` it is a queue;
-a `LinkedList` used through `get(i)` is a list. `java.util.Stack` keeps its top last.
-
-**Your own nodes.** A class with fields of its own type is a node: `left` + `right` → tree node;
-one link (plus an optional `prev`) → linked-list node. Lists are drawn as chains, one row per chain
-(a reversal in progress is two chains); trees with x = inorder position and y = depth, so a BST reads
-sorted. Variables label the nodes they point at; the node the current call is at is filled and the
-nodes its callers are at are outlined, which shows the path a recursion took.
-
-| Structure | Drawn as | Highlighted each step |
-|---|---|---|
-| Stack | upright column, top at the top | pushed element; popped element as a ghost |
-| Queue / deque | row, front → rear | enqueued element; dequeued element as a ghost |
-| Priority queue | heap tree + its array | positions whose value changed |
-| Map / set | key → value table / chips | new or changed entries; looked-up keys outlined |
-| List / array | indexed boxes (lists of lists as rows) | as arrays |
-| Linked list | `[value│•]` boxes and arrows | new nodes; links that changed (amber) |
-| Binary tree | nodes and edges | current node, call path, new nodes and edges |
-
-### How graphs are found and drawn
-
-**Finding the graph.** Every graph algorithm has a *loop over the neighbours of a vertex*.
-`GraphModelBuilder` finds it in the AST in any of its usual forms, whatever the names:
-
-| Form | Example |
-|---|---|
-| Adjacency list | `for (int v : adj.get(u))`, `for (int v : adj[u])`, `for (String v : graph.get(u))` (a map) |
-| Weighted list | `for (int[] e : adj.get(u))` with `e[0]`/`e[1]`, or `for (Edge e : adj.get(u))` with `e.to` |
-| Index or iterator | `for (int i = 0; i < adj.get(u).size(); i++)`, `Iterator<Integer> it = adj[u].listIterator()` |
-| Adjacency matrix | `for (int v = 0; v < n; v++) if (g[u][v] != 0 ...)` |
-
-A loop only counts if the neighbour is then *used as a vertex*: it indexes a 1-D array (`visited[v]`),
-goes into a collection (`queue.offer(v)`) or into a recursive call (`dfs(v)`). That is what separates
-a graph from a DP table (`dp[i][w]`), Floyd–Warshall or a matrix product, which only index 2-D arrays,
-and from N-Queens (`isSafe(board, row, col)` is a helper call, not a vertex use).
-
-Around the loop, the same AST shows the traversal's state: the **visited** array or set (checked for
-the neighbour, marked somewhere with `= true` or `add`), the **frontier** (the collection the
-neighbour is added to and the vertex is taken from: FIFO queue, stack or priority queue), the
-**distance** array (`dist[v] = dist[u] + w`, a *relaxation* when guarded by `dist[u] + w < dist[v]`,
-a *BFS level* when it adds 1) and a **parent** array (`parent[v] = u`).
-
-**Rebuilding it at every step.** `GraphTracker` reads the graph object from the heap at each step
-(so a graph being built in `main` grows edge by edge), and the state from the variables named above:
-the current vertex `u`, the edge being examined (while inside the loop body), visited vertices,
-the frontier's contents, distances (`∞` for `Integer.MAX_VALUE`), the recursion path (one vertex per
-`dfs` call on the stack), the visit order, and the tree edges: from the parent array if there is one,
-otherwise the vertex that set a distance, discovered the vertex, or pushed it.
-Undirected = every edge u → v has a matching v → u; each such pair is drawn once.
-
-**Drawing it.** The layout is computed once per trace from the most complete graph, by a
-deterministic force-directed algorithm (Fruchterman–Reingold started from a circle), so vertices
-never move while you step and the same graph always looks the same.
-
-| Vertex / edge | Meaning |
-|---|---|
-| Amber fill | the vertex being processed (`u`) |
-| Dashed amber outline | waiting in the queue / stack / priority queue |
-| Amber outline | on the recursion path (recursive DFS) |
-| Green | visited (or processed, for Dijkstra) |
-| `#n` | position in the visit order |
-| `d=…` | distance, amber when it just changed |
-| Thick amber edge | the edge being examined |
-| Green edge | tree edge (BFS tree, DFS tree, shortest-path tree) |
-
-**Recognition and complexity** (`GraphAlgorithms`):
-
-| Algorithm | Recognised by | Time | Edges examined ≤ |
-|---|---|---|---|
-| BFS | FIFO queue + visited marks (or `dist[v] = dist[u] + 1`) | O(V + E) list, O(V²) matrix | 2E undirected / E directed; V² matrix |
-| DFS | recursion on unvisited neighbours, or a stack + visited | O(V + E) list, O(V²) matrix | same |
-| Dijkstra | relaxation + priority queue | O((V+E) log V) | 2E (if outdated entries are skipped) |
-| Dijkstra | relaxation + scan for the closest vertex | O(V²) | V² (matrix) |
-
-The representation the code actually uses decides which line applies. Prim's MST (`key[v] = w`
-without adding), Kahn's topological sort (in-degrees, no visited marks) and Bellman–Ford/SPFA
-(relaxation from a plain queue) share the neighbour loop and are drawn, but deliberately not
-reported as BFS or Dijkstra. A helper such as `minDistance()` inside a recognised Dijkstra is part of
-it, not reported on its own.
-
-**Library callbacks.** A comparator lambda `(a, b) -> a[0] - b[0]` is called by `PriorityQueue`
-on every offer and poll. Those calls come from inside the JDK, not from the program's own control
-flow, so the tracer lets them run without stopping (likewise `compareTo` during `Collections.sort`).
-
-### How backtracking is recognised and drawn
-
-**The shape.** `BacktrackModelBuilder` looks for a recursive method that goes **one level deeper** per
-call and has a **goal test** at that depth:
-
-```java
-static boolean solve(int[][] board, int row) {
-    if (row == N) return true;                       // goal test
-    for (int col = 0; col < N; col++) {              // one branch per choice
-        if (isSafe(board, row, col)) {               // check: a false here prunes the branch
-            board[row][col] = 1;                     // choose
-            if (solve(board, row + 1)) return true;  // explore one level deeper
-            board[row][col] = 0;                     // undo = backtrack
-        }
-    }
-    return false;
-}
-```
-
-or, without a loop, two calls that take and leave one element (`sub(i + 1, sum + a[i])`,
-`sub(i + 1, sum)`). "One level deeper" means every recursive call passes `row + 1` (or `i + 1` of the
-choice loop, for combinations); the depth can also be implicit, as in `path.size() == nums.length`.
-That is what separates a search from merge sort (`lo..mid`, `mid+1..hi`), Fibonacci (`n − 1`, `n − 2`),
-Towers of Hanoi, tree traversals and graph DFS (whose call sits in a loop over neighbours).
-
-**The problem**, which decides the size of the tree, is read from what the choice does:
-
-| Problem | Recognised by | Time | Full tree (no pruning) |
-|---|---|---|---|
-| N-Queens | a queen on `board[row][col]`, or `queens[row] = col` checked along diagonals (`Math.abs`, `row + c` / `row − c` arrays) | O(n!) | 1 + n + … + nⁿ |
-| Permutations | any element not used yet (`!used[i]`, `contains`), or swap / recurse / swap back | O(n·n!) | Σ n!/(n−k)! |
-| Subsets / subset sum | take / leave each element, or extend a combination with a later one | O(2ⁿ) | 2ⁿ⁺¹ − 1 |
-| Graph colouring | `color[v] = c`, checked against row `v` of the adjacency matrix | O(mⁿ) | 1 + m + … + mⁿ |
-| Anything else with the shape | | O(bᵈ) | 1 + b + … + bᵈ |
-
-n (the depth) comes from the goal test and m or b from the choice loop's range, evaluated at the first
-call of this run. The Complexity tab shows the nodes explored against the full tree.
-
-**The tree** (`SearchTracker`) is built from the real calls: a node per call, its parent the call it
-came from, labelled with the choice (the loop variable, the element it picks such as `nums[i]`, or
-`+x` / `−x` for take / leave).
-
-| Node | Meaning | How Vizard knows |
-|---|---|---|
-| Amber | the call running now, and the path to it | still on the call stack |
-| Red square | a choice the check rejected; never called | the check around the recursive call was false (shown once the check has returned) |
-| Red dashed | a call cut short | a bound check such as `if (sum > target) return;` was true |
-| Green ★ | a solution | while it was the deepest call the program printed, counted (`count++`), stored a result, or the leaf returned `true`. Changes to the search's own state (board, path, used) don't count |
-| Dashed grey | a dead end | a leaf that is none of the above |
-
-The whole tree is sent once (`analysis.searchTrees`); every node carries the step it appears at, the
-last step its call ran and the step its outcome is known, so the browser draws the tree as it was at
-any step, and clicking a node jumps to its call. For N-Queens the board is drawn from the program's
-own array; for graph colouring the graph's vertices are painted with `color[v]`.
-
-**Full screen and a quieter panel.** The Full screen button (or F) gives the Visualization panel
-the whole screen for big graphs, trees and boards; the step controls move into it and show the line
-being run as text. Esc leaves. The operation counters sit in a collapsed "Operation counts" section
-under the visualization (it remembers whether you opened it).
-
-**Step over / step out.** Backtracking traces are long, so two playback controls skip whole calls:
-*step over* (Shift+→) runs the calls made on the current line without stopping, and *step out*
-(Shift+↑) finishes the current call and stops back in its caller.
-
-### How dynamic programming is recognised and drawn
-
-**Tabulation (bottom-up).** `DpModelBuilder` looks for an array the method *creates* and fills inside
-loops from cells of the same array: `dp[i] = dp[i - 1] + dp[i - 2]`, or a local computed from it
-(`int cost = dp[i][k] + dp[k + 1][j] + …`). Reading the same array is the recurrence. An insertion
-sort (whose array is a parameter), a prefix sum (`p[i] = p[i - 1] + a[i]`, one look back in one loop)
-and the `dist[]` of BFS or Dijkstra (graph state, drawn on the graph) are not DP tables.
-
-**Memoisation (top-down).** A recursive method that checks a memo first and stores into it:
-`if (memo[n] != -1) return memo[n];` … `memo[n] = …` (a `HashMap` with `containsKey` / `put` works too).
-
-**Plain recursion** with two or more recursive calls whose arguments are the parameters plus or minus
-constants (`fib(n - 1) + fib(n - 2)`) is drawn as a recursion tree, with every call whose arguments
-were already computed marked as a **repeat**: the work DP saves.
-
-| Problem | Named by | Time | Space |
-|---|---|---|---|
-| Fibonacci, plain recursion | `f(n − 1) + f(n − 2)`, nothing remembered | O(2ⁿ) (2·F(n+1) − 1 calls) | O(n) |
-| Fibonacci, memoised / tabulated | the same with a memo / a table | O(n) | O(n) |
-| 0/1 knapsack | `max` with the capacity reduced by an item's weight | O(n·W) | O(n·W) |
-| Longest common subsequence | letters compared (`charAt`), `max` | O(m·n) | O(m·n) |
-| Edit distance | letters compared, `min` of three neighbours | O(m·n) | O(m·n) |
-| Coin change | a 1-D table looking back by a coin's value, `dp[a − coin]` | O(A·k) | O(A) |
-| Matrix chain | `dp[i][k] + dp[k + 1][j]` over a split point k | O(n³) | O(n²) |
-| Any other table / memo | the shape alone | from the loops / the number of states | the table |
-
-Recursive knapsack *without* a memo stays what Milestone 7 calls it (a take/leave search, O(2ⁿ)); add a
-memo and it becomes dynamic programming, O(n·W).
-
-**The table view** (`DpTracker`, `DpTableVisualizer`): on a line that uses the table, the cell being
-computed is amber, the cells it reads are blue with arrows into it, and below the table the line is
-shown as written and with its values (`dp[3][5] = Math.max(dp[i][w], dp[i - 1][w - wt[i - 1]] + val[i - 1])`
-→ `max(35, 15 + 30)` → `45`). Filled cells are green, cells not computed yet are faded, and cells the
-program only ever reads (the zero row of a knapsack table) are marked as base values. Every write is
-recorded with the step at which its value appears (`analysis.dpTables`), so stepping backwards un-fills
-the table. LCS and edit-distance tables are labelled with the letters of the two strings.
-
-**The recursion tree** (`RecursionTracker`) reuses the Milestone 7 tree: one node per call, labelled
-with its arguments. A memo hit (the call returned from the memo check) is drawn blue and dashed: its
-subtree was never built.
-
-### How branch and bound is recognised and drawn
-
-**With a live-node list** (`BnbModelBuilder`): a `while` loop that takes a node of *your* class out of a
-queue, stack or priority queue (`Node u = pq.poll();`), creates new nodes of that class from it, and
-compares a field of a node with a "best so far" variable (`if (u.bound <= best) continue;`,
-`if (v.bound > best) pq.add(v);`). The list decides the strategy: a priority queue is best-first
-(least-cost) branch and bound, a queue FIFO, a stack LIFO. A `bound()` helper that divides (takes a
-fraction of the next item) names the **0/1 knapsack** with the fractional-knapsack bound. Dijkstra's
-priority queue holds `int[]`, not node objects, so it is not mistaken for branch and bound.
-
-**Depth-first, recursive**: a backtracking method (Milestone 7) that keeps a best-so-far variable,
-updates it at the goal and compares against it in its check is backtracking *with a bound*. The cost
-matrix it reads names the problem: `dist[city][next]` (the row is the current city) is the
-**travelling salesman**, `cost[worker][job]` (the row is the level) is **job assignment**. The
-same TSP without the bound is reported as plain backtracking, so the example shows both side by side.
-
-| Problem | Bound | Worst case | Why the worst case stays |
-|---|---|---|---|
-| 0/1 knapsack (best-first) | fractional knapsack of the remaining items | O(2ⁿ) nodes | nothing may be prunable |
-| Travelling salesman | cost so far (+ next edge) vs best tour | O(n!) | every order may need completing |
-| Job assignment | cost so far + cheapest free job of each remaining worker | O(n!) | as above |
-
-The complexity is always the worst case of the method, never a claim about your run; the run's own
-counts (generated, expanded, pruned) are shown next to it, with the full tree size for this n.
-
-**The tree view** (`BnbTracker`, `SearchTreeVisualizer`): every new node object is a tree node whose
-parent is the node being expanded at that moment; it is followed through the list: generated (faded),
-live (dashed amber, waiting in the list), taken out (amber), expanded (grey) or pruned (red dashed:
-its bound could not beat the best). Below the tree: the best so far, the live list in the order it
-will be served, and the node just taken out. Every change of the best variable is recorded with the
-node that caused it (★). Counters: nodes generated, expanded, pruned by bound, best improved.
-
-### How a condition's result is decided
-
-For `if (arr[j] > arr[j + 1])` Vizard shows `5 > 2` and `true`. The values come from a small
-evaluator that reads the recorded state; it never runs code, and it treats anything with side
-effects (method calls, `i++`, assignments) as unknown. The true/false result is taken from **what
-actually happened next**: if the next line in the same method call is inside the branch, the
-condition was true. That works even for `if (isPrime(n))`, which the evaluator can't compute.
-For `if`/`while` the evaluator is used first (Vizard stops exactly where those conditions are
-evaluated); for a `for` header it's the other way round, because that stop happens before the
-loop's update runs.
-
-## Project structure
-
-```
-vizard/
-├── backend/                        Spring Boot (Maven)
-│   ├── pom.xml
-│   └── src/
-│       ├── main/java/com/vizard/
-│       │   ├── VizardApplication.java
-│       │   ├── api/                ExecutionController, GlobalExceptionHandler, dto/, dto/trace/
-│       │   ├── config/             ExecutionProperties (limits)
-│       │   └── execution/
-│       │       ├── ExecutionService.java       pipeline shared by Run and Step through
-│       │       ├── PreparedProgram.java
-│       │       ├── RunOutcomeClassifier.java
-│       │       ├── analysis/       SourceAnalyzer, SafetyPolicy, SourceAnalysis
-│       │       ├── compile/        JavaCompilerService, CompilationResult
-│       │       ├── sandbox/        ExecutionSandbox, RunningProgram, LocalProcessSandbox, ...
-│       │       ├── trace/          JdiTraceSession, HeapReader, CollectionReader, CollectionCalls,
-│       │       │                   SameLineLoops, TraceRunner, ...
-│       │       ├── insight/        CodeModelBuilder, CodeModel, Expr, ExpressionEvaluator,
-│       │       │                   TraceAnnotator, StructureRoles, GraphModelBuilder, GraphTracker,
-│       │       │                   BacktrackModelBuilder, SearchTracker, DpModelBuilder,
-│       │       │                   DpTracker, RecursionTracker, BnbModelBuilder, BnbTracker
-│       │       └── algorithms/     AlgorithmDetector, StructureAlgorithms, GraphAlgorithms,
-│       │                           BacktrackAlgorithms, SearchCosts, DpAlgorithms, DpCosts, BnbAlgorithms,
-│       │                           AlgorithmCatalog, StructureCosts,
-│       │                           StructureFacts, Algorithm, Detection
-│       ├── main/java/com/vizard/examples/   ExampleCatalog
-│       ├── main/resources/examples/         index.json + one .java file per example
-│       ├── main/resources/application.properties
-│       └── test/java/com/vizard/   execution/ExecutionServiceTest, TraceServiceTest, InsightTest,
-│                                   StatisticsTest, CollectionsTest, StructureStatisticsTest,
-│                                   GraphTraceTest, SearchTraceTest, DpTraceTest, BnbTraceTest,
-│                                   insight/CodeModelBuilderTest, insight/GraphModelBuilderTest,
-│                                   BacktrackModelBuilderTest, DpModelBuilderTest, BnbModelBuilderTest,
-│                                   trace/NodeShapeTest, algorithms/AlgorithmDetectorTest,
-│                                   StructureAlgorithmsTest, GraphAlgorithmsTest,
-│                                   BacktrackAlgorithmsTest, DpAlgorithmsTest, BnbAlgorithmsTest, examples/ExamplesTest
-└── frontend/                       Plain HTML/CSS/JS, served by the backend
-    ├── index.html
-    ├── css/styles.css
-    └── js/
-        ├── main.js, api.js, editor.js, outputPanel.js, values.js, tabs.js
-        ├── playback/        PlaybackController, PlaybackBar, describeStep
-        └── visualizations/  VisualizationPanel, ArrayVisualizer (SVG), StructureVisualizer,
-                             StackVisualizer, QueueVisualizer, HeapVisualizer, MapVisualizer,
-                             LinkedListVisualizer, TreeVisualizer, GraphVisualizer,
-                             SearchTreeVisualizer, BoardVisualizer, DpTableVisualizer,
-                             InsightStrip, StatsBar,
-                             ComplexityPanel, CallStackVisualizer, VariableVisualizer,
-                             visible.js, svg.js
-```
-
-## Requirements
-
-- **JDK 21** (a JDK, not a JRE — Vizard needs the compiler)
-- **Maven 3.9+** (bundled with IntelliJ IDEA)
-- Internet access in the browser (Monaco and fonts load from a CDN)
-
-## Run
+Requirements: **JDK 21** (a JDK, not a JRE: Vizard compiles your code), **Maven 3.9+** (bundled with
+IntelliJ IDEA), and internet access in the browser (the Monaco editor loads from a CDN).
 
 ```powershell
 cd backend
 mvn spring-boot:run
 ```
 
-Open http://localhost:18080. Run from the `backend` folder: the frontend is served from `../frontend`.
-
-## Test
+Open **http://localhost:18080** (run it from the `backend` folder: the frontend is served from `../frontend`).
 
 ```powershell
 cd backend
-mvn test
+mvn test          # 163 tests
 ```
 
-## API
+## Documentation
 
-### `POST /api/execute`
+| Document | Contents |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | the pipeline, how static analysis and the debugger meet, project structure, design decisions |
+| [docs/execution-engine.md](docs/execution-engine.md) | parsing, safety policy, compiling, the sandbox and its limits, tracing, how counting works, limitations |
+| [docs/visualization.md](docs/visualization.md) | how each structure is found and drawn: arrays, collections, trees, graphs, backtracking, DP, branch and bound |
+| [docs/complexity.md](docs/complexity.md) | recognised algorithms, the static estimator (loops, recurrences, master theorem), the growth check |
+| [docs/api.md](docs/api.md) | the REST API: `/api/execute`, `/api/trace`, `/api/growth`, `/api/examples`, `/api/health` |
+| [docs/testing.md](docs/testing.md) | what the 163 tests check and how expected values were obtained |
+| [docs/demo-script.md](docs/demo-script.md) | a 12-minute walk-through for a viva or presentation |
+| [docs/roadmap.md](docs/roadmap.md) | the ten milestones |
 
-```json
-{ "code": "public class Main { ... }", "stdin": "optional input" }
-```
+## Limits worth knowing
 
-Response (always HTTP 200 for anything the user's program did):
+- One source file with a `main` method; imports from `java.util`, `java.util.function`,
+  `java.util.stream`, `java.math`. No files, network, threads, reflection or `System.exit`.
+- Runs: 5 s, 128 MB heap, 64 KB of output. Traces: 3,000 steps, 15 s.
+- An estimate is an upper bound read from the code's shape, and a growth measurement describes the runs
+  it made; both are labelled as such. Only recognised algorithms get a textbook complexity.
+- Full list: [execution-engine.md § Tracing limitations](docs/execution-engine.md#tracing-limitations).
 
-```json
-{
-  "status": "SUCCESS | COMPILATION_ERROR | UNSUPPORTED_FEATURE | RUNTIME_ERROR | TIMEOUT | MEMORY_LIMIT_EXCEEDED | OUTPUT_LIMIT_EXCEEDED | INVALID_REQUEST | SERVER_BUSY | INTERNAL_ERROR",
-  "success": true,
-  "message": "Program finished successfully.",
-  "stdout": "...",
-  "stderr": "",
-  "exitCode": 0,
-  "compileTimeMs": 310,
-  "runTimeMs": 95,
-  "problems": [ { "line": 3, "column": 18, "message": "';' expected", "severity": "ERROR" } ],
-  "runtimeError": { "exceptionType": "java.lang.ArithmeticException", "message": "/ by zero", "line": 5 }
-}
-```
-
-Fields that are null are left out of the JSON.
-
-### `POST /api/trace`
-
-Same request. Response:
-
-```json
-{
-  "execution": { "...": "same shape as /api/execute" },
-  "truncated": false,
-  "maxSteps": 3000,
-  "steps": [
-    {
-      "index": 6,
-      "event": "LINE",
-      "line": 9,
-      "depth": 1,
-      "stack": [
-        { "className": "Main", "methodName": "main", "line": 9,
-          "variables": [
-            { "name": "arr", "type": "int[]", "argument": false,
-              "value": { "kind": "ref", "type": "int[]", "display": "int[]", "ref": 57 } },
-            { "name": "temp", "type": "int", "argument": false,
-              "value": { "kind": "primitive", "type": "int", "value": 5, "display": "5" } }
-          ] }
-      ],
-      "statics": [],
-      "heap": {
-        "57": { "id": 57, "kind": "array", "type": "int[]", "length": 4, "truncated": false,
-                "elements": [ { "kind": "primitive", "type": "int", "value": 2, "display": "2" } ],
-                "fields": [] }
-      },
-      "outputLength": 0
-    }
-  ]
-}
-```
-
-Every step also has an `insight`:
-
-```json
-"insight": {
-  "condition": { "kind": "if", "line": 6, "text": "arr[j] > arr[j + 1]", "explanation": "5 > 2", "result": true },
-  "accesses":  [ { "array": "arr", "ref": 57, "index": 0, "text": "arr[j]", "write": false, "compared": true } ],
-  "changes":   [ { "ref": 57, "indices": [1] } ],
-  "swap":      { "ref": 57, "first": 0, "second": 1 },
-  "pointers":  [ { "array": "arr", "ref": 57, "variable": "j", "index": 0 } ],
-  "loops":     [ { "kind": "for", "line": 5, "variable": "j", "iteration": 1 } ]
-}
-```
-
-plus `"ranges": [ { "array": "arr", "fromVariable": "low", "from": 4, "toVariable": "high", "to": 6 } ]`
-and `"loopBackTo": 5` when stopped on a loop's closing brace. Each step also has running `stats`:
-
-```json
-"stats": { "steps": 8, "comparisons": 1, "swaps": 1, "arrayReads": 4, "arrayWrites": 2,
-           "methodCalls": 0, "maxDepth": 1, "loopIterations": 2 }
-```
-
-(plus the collection counters, `verticesVisited`, `edgesExamined`, `relaxations`, for
-backtracking `nodesExplored`, `branchesPruned`, `solutionsFound`, `backtracks`, and for dynamic
-programming `cellsFilled`, `memoHits`, `repeatedCalls`). On a line that uses a DP table, `insight.dp`
-says what it computes:
-
-```json
-"dp": { "table": "dp", "ref": 63, "cell": [3, 5], "reads": [[3, 5], [2, 1]], "label": "dp[i][w]",
-        "formula": "Math.max(dp[i][w], dp[i - 1][w - wt[i - 1]] + val[i - 1])",
-        "values": "max(35, 15 + 30)", "result": "45", "write": true }
-```
-
-and `analysis.dpTables` lists each table with its size, labels and fill order
-(`{ "row": 3, "col": 5, "step": 74 }`, one entry per write). When the program
-has a graph, `insight.graph` describes it at that step:
-
-```json
-"graph": {
-  "name": "adj", "ref": 41, "representation": "adjacency-list", "directed": false, "weighted": true,
-  "vertices": ["0", "1", "2", "3", "4"],
-  "edges": [ { "from": "0", "to": "1", "weight": "4" }, { "from": "0", "to": "2", "weight": "1" } ],
-  "current": "1", "examining": { "from": "1", "to": "3", "weight": "1" },
-  "visited": [], "frontier": ["1", "3"], "frontierName": "pq", "frontierOrder": "priority",
-  "onStack": [], "order": ["0", "2", "1"],
-  "treeEdges": [ { "from": "2", "to": "1" }, { "from": "0", "to": "2" } ],
-  "distances": [ { "vertex": "0", "value": "0" }, { "vertex": "4", "value": "∞" } ], "distName": "dist",
-  "truncated": false
-}
-```
-
-The response has an `analysis`:
-
-```json
-"analysis": {
-  "input": { "name": "arr", "n": 4 },
-  "algorithms": [ {
-    "id": "bubble-sort", "name": "Bubble sort", "category": "Sorting", "method": "main", "line": 2,
-    "evidence": [ "Two nested loops in main().", "Compares neighbouring elements arr[j] and arr[j + 1] (line 7)." ],
-    "complexity": { "best": "O(n²)", "average": "O(n²)", "worst": "O(n²)", "space": "O(1)", "stable": true, "note": "..." },
-    "bound": { "metric": "comparisons", "description": "element comparisons (exactly, for any input)",
-               "formula": "n(n−1)/2", "value": 6, "scope": "program" }
-  } ]
-}
-```
-
-For a backtracking program the analysis also has `searchTrees`:
-
-```json
-"searchTrees": [ {
-  "method": "solve", "problem": "n-queens", "kind": "loop", "depthVariable": "row", "choiceVariable": "col",
-  "assignment": "board", "assignmentShape": "matrix", "depthBound": 4, "branching": 4, "truncated": false,
-  "nodes": [
-    { "id": 0, "level": 0, "label": "", "choice": "first call", "firstStep": 2, "endStep": 258, "kind": "explored", "kindStep": 259 },
-    { "id": 1, "parent": 0, "level": 1, "label": "0", "choice": "col = 0", "firstStep": 11, "endStep": 161, "kind": "explored", "kindStep": 162 },
-    { "id": 2, "parent": 1, "level": 2, "label": "0", "choice": "col = 0", "firstStep": 16, "endStep": 16, "kind": "rejected", "kindStep": 16 }
-  ]
-} ]
-```
-
-Collections appear in the heap as `"kind": "collection"` with `elements` (or `entries` for maps),
-a `role` and, for stacks, `top` (`"first"` or `"last"`). User node objects carry a `role`
-(`"list-node"` / `"tree-node"`) and their `links` (`["next"]`, `["left", "right"]`). Each step lists the
-collection calls made since the previous step:
-
-```json
-"operations": [ { "ref": 60, "type": "ArrayDeque", "method": "push", "args": [ { "display": "'('" } ],
-                  "line": 9, "kind": "push" } ]
-```
-
-and `analysis.structures` gives each collection's calls with their cost:
-
-```json
-"structures": [ { "variable": "count", "type": "HashMap", "role": "map",
-                  "operations": [ { "method": "put", "count": 6, "cost": "O(1) average" } ], "note": "..." } ]
-```
-
-Tree and list algorithms add `measures`, e.g. `{ "label": "Height h of this tree", "value": "2" }`.
-
-Events: `CALL` (first line of a method just called), `LINE` (line about to run), `RETURN`
-(method returning; `returnValue` present unless void), `EXCEPTION` (uncaught; last step).
-`outputLength` is how many characters of `execution.stdout` existed at that step.
-
-### `GET /api/examples`
-
-The Example menu: `[{ "id", "title", "group", "code", "stdin"?, "algorithms" }]`, read from
-`backend/src/main/resources/examples/`. To add an example, add a `.java` file there and a line in
-`index.json`; `ExamplesTest` then checks it compiles, traces and is recognised as exactly `algorithms`.
-
-### `GET /api/health`
-
-`{ "status": "UP", "javaVersion": "21..." }`
-
-## Execution limits
-
-Configured in `application.properties`:
-
-| Property | Default | Meaning |
-|---|---|---|
-| `vizard.execution.timeout-ms` | 5000 | Wall-clock limit per run |
-| `vizard.execution.max-heap-mb` | 128 | `-Xmx` of the program's JVM |
-| `vizard.execution.max-output-bytes` | 65536 | stdout cap; the program is stopped when exceeded |
-| `vizard.execution.max-concurrent-runs` | 2 | Simultaneous runs and traces |
-| `vizard.execution.trace-timeout-ms` | 15000 | Wall-clock limit for a traced run |
-| `vizard.execution.max-trace-steps` | 3000 | Steps recorded; the rest of the program then runs untraced |
-
-## Supported Java (Milestone 1)
-
-One source file with a `public static void main(String[] args)`; any number of classes and methods.
-Imports allowed from `java.util`, `java.util.function`, `java.util.stream`, `java.math`.
-Not allowed: file I/O, network, processes, threads, reflection, `System.exit`, native methods.
-
-## Tracing limitations
-
-- Loops written on one line (`for (...) sum += i;`) are stepped through every iteration (an extra
-  breakpoint is placed on the loop's jump-back target), but they get no iteration counter.
-- When a `for` loop ends, its variable is already out of scope, so the final check shows as
-  `j < 3` is `false` rather than `3 < 3`.
-- Collections are read from JDK 21's internal fields. Other collection classes (and wrappers such as
-  `Collections.unmodifiableList`) show their type name only. At most 100 elements are shown.
-- Only calls your code makes directly on a collection are counted; a call made inside a library method
-  (`Collections.sort(list)`) is not. `remove()` on a `PriorityQueue` isn't counted (it lives in a
-  superclass).
-- Trees show up to 63 nodes; lists 12 nodes per row.
-- Graphs are found through a loop over a vertex's neighbours. A graph made of node objects that hold a
-  list of neighbour objects (`node.neighbors`), an edge list (`int[][] edges` scanned as a whole, as in
-  Bellman–Ford) and grid BFS (`grid[r][c]` with direction arrays) are not drawn as graphs; their arrays
-  and collections are still shown. Vertices must be ints, chars or strings. Graphs are laid out for
-  readability up to about 15 vertices.
-- User methods called *by library code* (a comparator lambda inside `PriorityQueue`, `compareTo` during
-  `Collections.sort`, `toString` during string concatenation) run without being stepped through.
-- Backtracking needs a recursive method that goes one level deeper per call with a goal test at the
-  top (or a combination loop). Searches written with an explicit stack, recursion over a 2-D grid
-  (`solve(r, c + 1)` with wrap-around, as in many Sudoku solvers) and mutual recursion are not drawn as
-  state-space trees. Trees show the first 1500 nodes. A solution is detected by its effect (output,
-  a counter, a stored result, `return true` at a leaf), so a solution that is only kept in a local
-  variable is drawn as a dead end.
-- Rejected choices are shown when the check is an `if` around the recursive call or an
-  `if (...) continue;` before it, and its result is known (a method call such as `isSafe(...)`, or
-  values Vizard can evaluate).
-- DP tables are found when the method creates the array it fills; a table created in `main` and filled
-  in another method, or filled by recursion without a memo check, is shown as a plain array. Tables up to
-  600 cells are drawn as a table. Only arrays get the table view; a `HashMap` memo still gets the
-  recursion tree.
-- Algorithm recognition covers the textbook shapes of thirty-three algorithms. Unusual implementations
-  (e.g. a three-way quick sort, or merge sort without a separate merge loop) may not be recognised,
-  in which case no complexity is claimed. Counts stay exact either way.
-- Comparisons are counted per evaluated condition, so `if (a[i] > x && a[i] < y)` counts once.
-- Pointers are detected from how variables are used (`arr[j]`, `mid = low + (high - low) / 2`,
-  `i < arr.length`); an index variable used in other ways may not get a caret.
-- At most 3000 steps are recorded; arrays show their first 100 elements and each step keeps up to 150 objects.
-- The first step may be a class's static setup (`static int count = 0;`), which Java really runs before `main`.
-
-## Security model and known limitations
-
-User code never runs inside the Spring Boot process. It runs in a separate JVM with a timeout,
-heap cap, output cap, one visible CPU, an empty environment and a throwaway working directory.
-The AST-based `SafetyPolicy` rejects dangerous APIs before compiling.
-
-This is a **development sandbox for local use**, not a hardened one: on Windows it cannot block
-file or network access at the OS level, and native (off-heap) memory is not capped. The
-`ExecutionSandbox` interface exists so a container-based sandbox (Docker with `--network none`,
-read-only filesystem, cgroup CPU/memory limits) can replace `LocalProcessSandbox` without other changes.
-Do not expose this server to the internet.
+**Security:** user code runs in a separate, resource-limited JVM after an AST safety check, but this is
+a development sandbox for local use. Do not expose the server to the internet.

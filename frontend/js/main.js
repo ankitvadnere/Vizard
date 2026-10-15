@@ -5,7 +5,7 @@
 //   trace – a recorded execution is loaded; the controls move through its steps.
 //           Editing the code leaves trace mode, because the steps no longer match it.
 
-import { executeCode, traceCode, checkHealth, fetchExamples } from "./api.js";
+import { executeCode, traceCode, checkHealth, fetchExamples, measureGrowth } from "./api.js";
 import {
     initEditor, getCode, setCode, onCodeChange, showProblems, markRuntimeErrorLine,
     clearDiagnostics, goToLine, highlightExecutionLine, clearExecutionLine,
@@ -19,6 +19,7 @@ import { PlaybackBar } from "./playback/PlaybackBar.js";
 import { VariableVisualizer } from "./visualizations/VariableVisualizer.js";
 import { VisualizationPanel } from "./visualizations/VisualizationPanel.js";
 import { ComplexityPanel } from "./visualizations/ComplexityPanel.js";
+import { initShortcutsHelp } from "./shortcuts.js";
 import { createTabs } from "./tabs.js";
 import { initFullscreen } from "./fullscreen.js";
 
@@ -38,9 +39,11 @@ visualization.onJump = (index) => {
     playback.goTo(index);
 };
 const complexity = new ComplexityPanel(
-    document.getElementById("complexity"), document.getElementById("complexity-dot"));
+    document.getElementById("complexity"), document.getElementById("complexity-dot"),
+    () => measureGrowth(getCode(), getStdin()));
 const leftTabs = createTabs(document.querySelector(".variables-pane"));
 initFullscreen();
+initShortcutsHelp();
 const stepCode = document.getElementById("step-code");
 
 const FALLBACK_CODE = `public class Main {

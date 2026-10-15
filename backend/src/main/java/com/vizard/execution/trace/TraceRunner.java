@@ -111,7 +111,8 @@ public class TraceRunner {
         List<AlgorithmMatch> matches = program.algorithms().stream()
                 .map(d -> AlgorithmCatalog.describe(d, n, facts))
                 .toList();
-        return new ProgramAnalysis(matches, input, structureUses(steps), trees, annotated.dpTables());
+        return new ProgramAnalysis(matches, input, structureUses(steps), trees, annotated.dpTables(),
+                program.estimates() == null ? List.of() : program.estimates());
     }
 
     /**
