@@ -1,5 +1,6 @@
 package com.vizard.execution.insight;
 
+import com.vizard.api.dto.analysis.BestUpdate;
 import com.vizard.api.dto.analysis.SearchNode;
 import com.vizard.api.dto.analysis.SearchTree;
 import com.vizard.api.dto.trace.ConditionInsight;
@@ -47,6 +48,7 @@ final class SearchTracker {
     int newPruned;
     int newSolutions;
     int newBacktracks;
+    int newBestUpdates;
 
     private static final class Node {
         int id = -1;
@@ -72,6 +74,7 @@ final class SearchTracker {
     private static final class Tree {
         final SearchSpec spec;
         final List<Rejection> pending = new ArrayList<>();
+        final List<BestUpdate> bestUpdates = new ArrayList<>();
         final List<Node> nodes = new ArrayList<>();
         final Deque<Node> open = new ArrayDeque<>();
         Node lastDeepest;
@@ -104,9 +107,23 @@ final class SearchTracker {
         newPruned = 0;
         newSolutions = 0;
         newBacktracks = 0;
+        newBestUpdates = 0;
         TraceStep step = steps.get(k);
         for (Tree t : trees.values()) {
             SearchSpec spec = t.spec;
+            if (k > 0 && spec.bestVar() != null) {
+                String before = staticValue(steps.get(k - 1), spec.bestVar());
+                String now = staticValue(step, spec.bestVar());
+                if (now != null && before != null && !now.equals(before)) {
+                    // Branch and bound: the best so far improved, found by the deepest call running.
+                    t.bestUpdates.add(new BestUpdate(k, now, t.lastDeepest == null || t.lastDeepest.id < 0
+                            ? null : t.lastDeepest.id));
+                    newBestUpdates++;
+                    if (t.lastDeepest != null) {
+                        markSolution(t.lastDeepest, k);
+                    }
+                }
+            }
             if (k > 0 && t.lastDeepest != null && recordedSomething(steps.get(k - 1), step, spec)) {
                 markSolution(t.lastDeepest, k);
             }
@@ -183,7 +200,8 @@ final class SearchTracker {
             }
             SearchSpec s = t.spec;
             result.add(new SearchTree(s.method(), s.problem(), s.kind(), s.depthParam(), s.choiceVar(),
-                    s.assignment(), s.assignmentShape(), t.depthBound, t.branching, nodes, t.truncated));
+                    s.assignment(), s.assignmentShape(), t.depthBound, t.branching, nodes, t.truncated,
+                    s.bestVar(), List.copyOf(t.bestUpdates), null));
         }
         return result;
     }
@@ -291,7 +309,9 @@ final class SearchTracker {
         EvalContext ctx = new EvalContext(step, 0);
         SearchSpec s = t.spec;
         if (s.goalBound() != null && ExpressionEvaluator.evaluate(s.goalBound(), ctx) instanceof Long d) {
-            t.depthBound = d;
+            // levels still to go: from the first call's depth (row = 0, count = 1) to the goal
+            Object start = s.depthParam() == null ? null : ExpressionEvaluator.evaluate(new Expr.Name(s.depthParam()), ctx);
+            t.depthBound = start instanceof Long st && st > 0 && st < d ? d - st : d;
         }
         if (s.kind().equals("binary")) {
             t.branching = 2L;
@@ -323,19 +343,33 @@ final class SearchTracker {
      * Between two steps the program printed something, increased a static counter, or added to a
      * collection that is not part of the search's own state.
      */
+    /** A static field's value by its simple name (best → Main.best), as displayed; null if there is none. */
+    static String staticValue(TraceStep step, String name) {
+        for (VariableSnapshot v : step.statics()) {
+            if (v.name().endsWith("." + name)) {
+                return v.value().display();
+            }
+        }
+        return null;
+    }
+
     private static boolean recordedSomething(TraceStep before, TraceStep after, SearchSpec spec) {
         if (after.outputLength() > before.outputLength()) {
             return true;
         }
         Set<String> state = new HashSet<>(spec.stateNames());
+        if (spec.bestVar() != null) {
+            state.add(spec.bestVar()); // handled as a best update
+        }
         for (VariableSnapshot now : after.statics()) {
             String plain = now.name().substring(now.name().indexOf('.') + 1);
             if (state.contains(plain) || !(now.value().value() instanceof Number n)) {
                 continue;
             }
             for (VariableSnapshot old : before.statics()) {
+                // count++ or a new best (best = Math.min(best, cost) goes down)
                 if (old.name().equals(now.name()) && old.value().value() instanceof Number o
-                        && n.doubleValue() > o.doubleValue()) {
+                        && n.doubleValue() != o.doubleValue()) {
                     return true;
                 }
             }

@@ -14,6 +14,7 @@ import java.util.Map;
  * @param searches    backtracking searches: one per recursive method with the choose → recurse → undo shape
  * @param tables      dynamic-programming tables (dp[] filled bottom-up, or a memo[] filled top-down)
  * @param recursions  recursive methods drawn as recursion trees: memoised ones and plain overlapping recursion
+ * @param bnbs        branch and bound with a live-node list of node objects
  */
 public record CodeModel(
         Map<Integer, List<ConditionSite>> conditions,
@@ -23,16 +24,18 @@ public record CodeModel(
         List<GraphSpec> graphs,
         List<SearchSpec> searches,
         List<TableSpec> tables,
-        List<RecursionSpec> recursions
+        List<RecursionSpec> recursions,
+        List<BnbSpec> bnbs
 ) {
 
     public CodeModel(Map<Integer, List<ConditionSite>> conditions, List<LoopSite> loops,
                      Map<Integer, List<ArrayAccessSite>> accesses, List<MethodSite> methods) {
-        this(conditions, loops, accesses, methods, List.of(), List.of(), List.of(), List.of());
+        this(conditions, loops, accesses, methods, List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public static CodeModel empty() {
-        return new CodeModel(Map.of(), List.of(), Map.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        return new CodeModel(Map.of(), List.of(), Map.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of());
     }
 
     /**
@@ -175,13 +178,15 @@ public record CodeModel(
      *                       "vector" (color[v] = c), or null
      * @param stateNames     variables the choices change and undo (board, path, used): changes to them are
      *                       the search moving, not a solution being recorded
+     * @param bestVar        branch and bound: the best value found so far ({@code best}), which the checks
+     *                       compare a branch against and the goal updates; null for plain backtracking
      */
     public record SearchSpec(String method, int methodStart, int methodEnd, String kind, String problem,
                              String depthParam, int goalLine, Expr goalBound, List<Integer> cutLines,
                              int loopLine, String choiceVar, Expr choiceFrom, Expr choiceTo, boolean inclusive,
                              List<Integer> rejectIfFalse, List<Integer> rejectIfTrue, List<Integer> callLines,
                              Expr item, int includeLine, List<Integer> undoLines, String assignment,
-                             String assignmentShape, List<String> stateNames) {
+                             String assignmentShape, List<String> stateNames, String bestVar) {
 
         boolean methodContains(int line) {
             return line >= methodStart && line <= methodEnd;
@@ -237,6 +242,34 @@ public record CodeModel(
      */
     public record RecursionSpec(String method, int methodStart, int methodEnd, String memo, int checkStart,
                                 int checkEnd, String problem) {
+
+        boolean methodContains(int line) {
+            return line >= methodStart && line <= methodEnd;
+        }
+    }
+
+    /**
+     * Branch and bound with a live-node list, found by {@link BnbModelBuilder}: node objects wait in a
+     * queue, stack or priority queue; each one taken out is expanded into children, and a node whose
+     * bound cannot beat the best solution so far is dropped.
+     *
+     * @param frontier   the live-node list (pq, queue)
+     * @param order      "priority" (best-first / least-cost), "queue" (FIFO) or "stack" (LIFO)
+     * @param nodeClass  the node class (Node)
+     * @param current    the variable holding the node being expanded (u)
+     * @param boundField the node field compared with the best (bound)
+     * @param bestVar    the best value so far (best, maxProfit)
+     * @param valueField the node field the best is taken from (profit, cost), or null
+     * @param levelField the node field counting levels (level), or null
+     * @param maximise   the best is a maximum (bounds are upper bounds)
+     * @param problem    "knapsack" (a fractional bound) or "branch-and-bound"
+     * @param pruneLines lines whose condition being true discards the current node ({@code if (u.bound <= best) continue;})
+     * @param addGuards  lines whose condition being false drops a new node instead of adding it, with that node's variable
+     */
+    public record BnbSpec(String method, int methodStart, int methodEnd, String frontier, String order,
+                          String nodeClass, String current, String boundField, String bestVar, String valueField,
+                          String levelField, boolean maximise, String problem, List<Integer> pruneLines,
+                          Map<Integer, String> addGuards) {
 
         boolean methodContains(int line) {
             return line >= methodStart && line <= methodEnd;

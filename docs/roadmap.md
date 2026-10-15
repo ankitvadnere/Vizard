@@ -108,7 +108,7 @@ calls, memo hits, repeated calls), because cells filled, not a worst case, is wh
 - **Complexity**: from the table's dimensions × work per cell, e.g. knapsack O(n·W), LCS O(m·n);
   naive Fibonacci O(2ⁿ) vs O(n), with the call counts of both shown.
 
-## Milestone 9 — Branch and bound
+## Milestone 9 — Branch and bound (done)
 
 Builds on the state-space tree (Milestone 7) and `PriorityQueue` visibility (Milestone 5).
 

@@ -81,10 +81,11 @@ public final class BacktrackModelBuilder {
         if (calls.isEmpty()) {
             return Optional.empty();
         }
+        boolean overNeighbours = false;
         for (GraphSpec g : GraphModelBuilder.find(m, cu)) {
             for (MethodCallExpr c : calls) {
                 if (line(c) >= g.loopLine() && line(c) <= g.bodyEnd()) {
-                    return Optional.empty(); // recursion over a vertex's neighbours: graph DFS
+                    overNeighbours = true;
                 }
             }
         }
@@ -117,6 +118,9 @@ public final class BacktrackModelBuilder {
                 depth = p;
                 viaLoopVar = !allPlusOne;
             }
+        }
+        if (overNeighbours && depth == null) {
+            return Optional.empty(); // recursion over a vertex's neighbours, no level counter: graph DFS
         }
         String kind = loop != null ? "loop" : calls.size() >= 2 && depth != null ? "binary" : null;
         if (kind == null) {
@@ -276,6 +280,10 @@ public final class BacktrackModelBuilder {
 
         String problem = classify(m, cu, kind, viaLoopVar, depth, loopVar, loop, chooses, undos, guardCode,
                 assignment, cellOfDepthAndChoice, depthGetsChoice);
+        String tour = costMatrix(loop, depth, loopVar);
+        if (tour != null) {
+            problem = tour; // "tsp" or "assignment": a cost matrix read for each choice and added up
+        }
 
         Expression[] range = loop == null ? null : range(loop);
         return Optional.of(new SearchSpec(m.getNameAsString(), line(m), endLine(m), kind, problem, depth,
@@ -287,7 +295,69 @@ public final class BacktrackModelBuilder {
                 rejectIfFalse, rejectIfTrue, List.copyOf(callLines),
                 item == null ? null : CodeModelBuilder.convert(item), includeLine,
                 undos.stream().map(BacktrackModelBuilder::line).distinct().toList(), assignment, shape,
-                stateNames(chooses, undos)));
+                stateNames(chooses, undos), bestVar(m, goal, cutLines, rejectIfFalse, rejectIfTrue)));
+    }
+
+    // ---------- branch and bound ------------------------------------------------------------
+
+    /**
+     * A variable the method updates ({@code best = Math.min(best, cost)}, {@code best = costSoFar})
+     * that a check compares a branch with ({@code cost + d < best}, {@code lowerBound(...) < best}):
+     * the best solution so far, which makes the search branch and bound.
+     */
+    private static String bestVar(MethodDeclaration m, IfStmt goal, List<Integer> cutLines,
+                                  List<Integer> rejectIfFalse, List<Integer> rejectIfTrue) {
+        Set<String> assigned = new LinkedHashSet<>();
+        for (AssignExpr a : m.findAll(AssignExpr.class)) {
+            if (a.getTarget().isNameExpr()) {
+                assigned.add(a.getTarget().toString());
+            }
+        }
+        Set<Integer> checkLines = new LinkedHashSet<>(cutLines);
+        checkLines.addAll(rejectIfFalse);
+        checkLines.addAll(rejectIfTrue);
+        for (IfStmt test : m.findAll(IfStmt.class)) {
+            if (test == goal || !checkLines.contains(line(test.getCondition()))) {
+                continue;
+            }
+            for (BinaryExpr b : test.getCondition().findAll(BinaryExpr.class)) {
+                boolean ordering = b.getOperator() == BinaryExpr.Operator.LESS || b.getOperator() == BinaryExpr.Operator.GREATER
+                        || b.getOperator() == BinaryExpr.Operator.LESS_EQUALS
+                        || b.getOperator() == BinaryExpr.Operator.GREATER_EQUALS;
+                if (!ordering) {
+                    continue;
+                }
+                for (Expression side : List.of(b.getLeft(), b.getRight())) {
+                    if (side.isNameExpr() && assigned.contains(side.toString())) {
+                        return side.toString();
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A 2-D cost matrix read for the choice and added to a running cost: {@code cost + dist[city][next]}
+     * (from the current city: travelling salesman) or {@code costSoFar + cost[worker][job]} (row = the
+     * depth: job assignment).
+     */
+    private static String costMatrix(ForStmt loop, String depth, String loopVar) {
+        if (loop == null || loopVar == null) {
+            return null;
+        }
+        for (BinaryExpr plus : loop.getBody().findAll(BinaryExpr.class)) {
+            if (plus.getOperator() != BinaryExpr.Operator.PLUS) {
+                continue;
+            }
+            for (Expression side : List.of(plus.getLeft(), plus.getRight())) {
+                if (side instanceof ArrayAccessExpr cell && cell.getName() instanceof ArrayAccessExpr row
+                        && isName(cell.getIndex(), loopVar) && row.getIndex().isNameExpr()) {
+                    return isName(row.getIndex(), depth) ? "assignment" : "tsp";
+                }
+            }
+        }
+        return null;
     }
 
     // ---------- which problem ------------------------------------------------------------

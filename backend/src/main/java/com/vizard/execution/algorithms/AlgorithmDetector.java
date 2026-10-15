@@ -58,8 +58,9 @@ public final class AlgorithmDetector {
                 continue;
             }
             Optional<Detection> d = DpAlgorithms.detect(m, cu)
-                    .or(() -> GraphAlgorithms.detect(m, cu))
+                    .or(() -> BnbAlgorithms.detect(m, cu))
                     .or(() -> BacktrackAlgorithms.detect(m, cu))
+                    .or(() -> GraphAlgorithms.detect(m, cu))
                     .or(() -> StructureAlgorithms.detect(m, nodeClasses))
                     .or(() -> mergeSort(m, methodsByName))
                     .or(() -> quickSort(m, methodsByName))

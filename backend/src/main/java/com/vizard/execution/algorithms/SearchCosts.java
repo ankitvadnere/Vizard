@@ -16,8 +16,21 @@ record SearchCosts(ComplexityInfo complexity, OperationBound bound, List<Measure
     private static final long TOO_BIG = Long.MAX_VALUE / 64;
 
     static SearchCosts of(Detection d, StructureFacts facts) {
-        Long n = facts.searchDepth();
-        Long b = facts.searchBranching();
+        return of(d, facts, null);
+    }
+
+    /**
+     * @param inputN the length of the program's largest array (the items of a knapsack), or null
+     */
+    static SearchCosts of(Detection d, StructureFacts facts, Integer inputN) {
+        java.util.Map<String, Long> own = facts.of(d.method());
+        Long n = own.getOrDefault("depth", facts.searchDepth());
+        Long b = own.getOrDefault("branching", facts.searchBranching());
+        long explored = own.getOrDefault("explored", (long) facts.nodesExplored());
+        // One live counter per program: compare it with a bound only when there is a single search.
+        boolean single = facts.methods() == null
+                || facts.methods().values().stream().filter(m -> m.containsKey("explored")).count() <= 1;
+        String metric = "nodesExplored";
         ComplexityInfo complexity;
         String formula;
         String what;
@@ -68,6 +81,48 @@ record SearchCosts(ComplexityInfo complexity, OperationBound bound, List<Measure
                 full = n == null || b == null ? null : powerSum(b, n);
                 sizeText = n == null || b == null ? null : "n = " + n + " vertices, m = " + b + " colours";
             }
+            case TSP_BACKTRACKING, TSP_BNB -> {
+                boolean bnb = d.algorithm() == Algorithm.TSP_BNB;
+                complexity = new ComplexityInfo(bnb ? "O(n!)" : "O(n!)", "O(n!)", "O(n!)", "O(n)", null,
+                        "From the start city there are (n − 1)! orders of the other cities, each costing O(n) to "
+                                + "build, so trying them all is O(n!)."
+                                + (bnb ? " The bound (the cost so far already reaches the best tour) cuts whole "
+                                + "subtrees, often most of the tree, but in the worst case nothing is cut, so the "
+                                + "worst case stays O(n!)." : " Nothing is cut: every order is completed."));
+                formula = "1 + (n−1) + (n−1)(n−2) + … + (n−1)!";
+                what = "nodes in the full tree (every order of the other cities)";
+                full = n == null ? null : permutationNodes(n);
+                sizeText = n == null ? null : "n = " + (n + 1) + " cities";
+            }
+            case ASSIGNMENT_BACKTRACKING, ASSIGNMENT_BNB -> {
+                boolean bnb = d.algorithm() == Algorithm.ASSIGNMENT_BNB;
+                complexity = new ComplexityInfo("O(n!)", "O(n!)", "O(n!)", "O(n)", null,
+                        "n workers get n jobs in n! possible ways."
+                                + (bnb ? " The lower bound (cost so far plus the cheapest free job of every worker "
+                                + "left) cuts branches that cannot beat the best assignment; the worst case is still O(n!)."
+                                : ""));
+                formula = "n!/n! + n!/(n−1)! + … + n!/0!";
+                what = "nodes in the full tree (every partial assignment)";
+                full = n == null ? null : permutationNodes(n);
+                sizeText = n == null ? null : "n = " + n + " workers";
+            }
+            case KNAPSACK_BNB -> {
+                complexity = new ComplexityInfo("O(2ⁿ)", "O(2ⁿ)", "O(2ⁿ)", "O(2ⁿ)", null,
+                        "Every item is taken or left, so the full tree has 2ⁿ leaves. Each node gets an upper "
+                                + "bound (the fractional-knapsack value of what is left); a node whose bound cannot beat "
+                                + "the best value found is never expanded. Best-first order expands the most promising "
+                                + "node first. In the worst case nothing can be pruned, and the live list can hold "
+                                + "O(2ⁿ) nodes.");
+                Long items = own.containsKey("items") ? own.get("items") : inputN == null ? null : (long) inputN;
+                formula = "2ⁿ⁺¹ − 1";
+                what = "nodes in the full take/leave tree at most";
+                full = items == null || items > 60 ? null : (1L << (items + 1)) - 1;
+                sizeText = items == null ? null : "n = " + items + " items";
+                metric = "nodesGenerated";
+                explored = own.getOrDefault("generated", 0L);
+                n = items;
+                b = 2L;
+            }
             default -> {
                 complexity = new ComplexityInfo("O(bᵈ)", "O(bᵈ)", "O(bᵈ)", "O(d)", null,
                         "A search with b choices per level and d levels has up to bᵈ leaves; pruning can only "
@@ -78,18 +133,26 @@ record SearchCosts(ComplexityInfo complexity, OperationBound bound, List<Measure
                 sizeText = n == null || b == null ? null : "b = " + b + ", d = " + n;
             }
         }
-        OperationBound bound = full == null ? null
-                : new OperationBound("nodesExplored", what, formula, full, "per search", sizeText);
+        OperationBound bound = full == null || !single ? null
+                : new OperationBound(metric, what, formula, full, "per search", sizeText);
         List<Measure> measures = new ArrayList<>();
         if (n != null) {
-            measures.add(new Measure(d.algorithm() == Algorithm.GRAPH_COLORING ? "Vertices n" : "Levels n", n.toString()));
+            measures.add(new Measure(d.algorithm() == Algorithm.GRAPH_COLORING ? "Vertices n"
+                    : d.algorithm() == Algorithm.KNAPSACK_BNB ? "Items n" : "Levels n", n.toString()));
         }
         if (b != null) {
             measures.add(new Measure(d.algorithm() == Algorithm.GRAPH_COLORING ? "Colours m" : "Choices per level",
                     b.toString()));
         }
-        if (facts.nodesExplored() > 0) {
-            measures.add(new Measure("Nodes explored", Integer.toString(facts.nodesExplored())));
+        if (explored > 0) {
+            measures.add(new Measure(metric.equals("nodesGenerated") ? "Nodes generated" : "Nodes explored",
+                    Long.toString(explored)));
+        }
+        if (own.containsKey("expanded")) {
+            measures.add(new Measure("Expanded", own.get("expanded").toString()));
+        }
+        if (own.containsKey("pruned")) {
+            measures.add(new Measure("Pruned by the bound", own.get("pruned").toString()));
         }
         if (full != null) {
             measures.add(new Measure("Full tree", Long.toString(full)));

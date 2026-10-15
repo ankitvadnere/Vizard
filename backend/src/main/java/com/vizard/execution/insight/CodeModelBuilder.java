@@ -99,8 +99,22 @@ public final class CodeModelBuilder {
             methods.add(new MethodSite(name, line(m), endLine(m), pointers, ranges(m, pointers)));
         }
 
-        return new CodeModel(conditions, loops, accesses, methods, GraphModelBuilder.build(cu),
-                BacktrackModelBuilder.build(cu), DpModelBuilder.tables(cu), DpModelBuilder.recursions(cu));
+        List<CodeModel.SearchSpec> searches = BacktrackModelBuilder.build(cu);
+        // A cost matrix cost[worker][job] is read like an adjacency matrix, but it is not a graph.
+        java.util.Set<String> assignments = new java.util.HashSet<>();
+        searches.stream().filter(s -> s.problem().equals("assignment")).forEach(s -> {
+            assignments.add(s.method());
+            // and its helpers (a lower bound that scans the same matrix)
+            cu.findAll(com.github.javaparser.ast.body.MethodDeclaration.class).stream()
+                    .filter(m -> m.getNameAsString().equals(s.method()))
+                    .flatMap(m -> m.findAll(com.github.javaparser.ast.expr.MethodCallExpr.class).stream())
+                    .filter(c -> c.getScope().isEmpty())
+                    .forEach(c -> assignments.add(c.getNameAsString()));
+        });
+        List<CodeModel.GraphSpec> graphs = GraphModelBuilder.build(cu).stream()
+                .filter(g -> !assignments.contains(g.method())).toList();
+        return new CodeModel(conditions, loops, accesses, methods, graphs, searches, DpModelBuilder.tables(cu),
+                DpModelBuilder.recursions(cu), BnbModelBuilder.build(cu));
     }
 
     // ---------- pointer variables -------------------------------------------------------

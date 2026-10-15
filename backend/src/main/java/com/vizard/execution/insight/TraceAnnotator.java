@@ -67,6 +67,7 @@ public final class TraceAnnotator {
         SearchTracker searches = new SearchTracker(steps, model.searches());
         DpTracker tables = new DpTracker(steps, model.tables());
         RecursionTracker recursions = new RecursionTracker(steps, model.recursions());
+        BnbTracker bnbs = new BnbTracker(steps, model.bnbs());
 
         for (int k = 0; k < steps.size(); k++) {
             TraceStep step = steps.get(k);
@@ -139,6 +140,14 @@ public final class TraceAnnotator {
                 stats.branchesPruned += searches.newPruned;
                 stats.solutionsFound += searches.newSolutions;
                 stats.backtracks += searches.newBacktracks;
+                stats.bestUpdates += searches.newBestUpdates;
+            }
+            if (bnbs.active()) {
+                bnbs.track(k, conditionInsight, next[k]);
+                stats.nodesGenerated += bnbs.newGenerated;
+                stats.nodesExpanded += bnbs.newExpanded;
+                stats.prunedByBound += bnbs.newPruned;
+                stats.bestUpdates += bnbs.newBest;
             }
             stats.cellsFilled += tables.active() ? tables.newCells : 0;
             if (recursions.active()) {
@@ -150,6 +159,7 @@ public final class TraceAnnotator {
         }
         List<SearchTree> trees = new ArrayList<>(searches.trees());
         trees.addAll(recursions.trees());
+        trees.addAll(bnbs.trees());
         return new Annotated(out, trees, tables.tables());
     }
 
@@ -200,6 +210,10 @@ public final class TraceAnnotator {
         int cellsFilled;
         int memoHits;
         int repeatedCalls;
+        int nodesGenerated;
+        int nodesExpanded;
+        int prunedByBound;
+        int bestUpdates;
         final Map<String, Integer> structureOps = new HashMap<>();
 
         void count(List<TraceStep> steps, int k, StepInsight insight, int iterationsStarted, boolean comparesValues) {
@@ -263,7 +277,7 @@ public final class TraceAnnotator {
                     Math.max(maxDepth, step.depth()), iterations, op("push"), op("pop"), op("enqueue"),
                     op("dequeue"), op("insert"), op("remove"), op("lookup"), verticesVisited, edgesExamined,
                     relaxations, nodesExplored, branchesPruned, solutionsFound, backtracks, cellsFilled, memoHits,
-                    repeatedCalls);
+                    repeatedCalls, nodesGenerated, nodesExpanded, prunedByBound, bestUpdates);
         }
 
         private int op(String kind) {

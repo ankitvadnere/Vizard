@@ -398,7 +398,9 @@ select {
 .search-svg .search-node.visited circle, .search-svg .search-node.explored circle { stroke: var(--muted); }
 .search-svg .search-node.path circle { stroke: var(--amber); stroke-width: 2.2; }
 .search-svg .search-node.active circle { stroke: var(--amber); }
-.search-svg .search-node.current circle { fill: var(--amber); stroke: var(--amber); }
+.search-svg .search-node.current circle, .search-svg .search-node.current.expanded circle,
+.search-svg .search-node.current.pruned circle { fill: var(--amber); stroke: var(--amber); }
+.search-svg .search-node.current.pruned .search-label { fill: #1f1603; }
 .search-svg .search-node.current .search-label { fill: #1f1603; font-weight: 600; }
 .search-svg .search-node.solution circle { fill: rgba(79, 192, 141, 0.35); stroke: var(--ok); stroke-width: 2.4; }
 .search-svg .search-star { fill: var(--ok); font-size: 12px; dominant-baseline: central; }
@@ -430,6 +432,14 @@ select {
 .search-svg .search-node.computed circle { stroke: var(--muted); }
 .search-svg .search-node.base circle { fill: var(--raised); stroke: var(--line); }
 .search-svg .search-node.base .search-label { fill: var(--muted); }
+.search-svg .search-node.live circle { stroke: var(--amber); stroke-dasharray: 4 2; fill: rgba(240, 180, 60, 0.12); }
+.search-svg .search-node.generated circle { opacity: 0.55; stroke-dasharray: 1 2; }
+.search-svg .search-node.expanded circle { stroke: var(--muted); fill: var(--raised); }
+.search-svg .search-node.taken circle { stroke: var(--amber); }
+.search-svg .search-node.pruned .search-label { fill: var(--err); }
+.swatch.search-live { border: 1.5px dashed var(--amber); background: rgba(240, 180, 60, 0.12); border-radius: 50%; }
+.swatch.search-generated { border: 1.5px dotted var(--line); border-radius: 50%; opacity: 0.6; }
+.swatch.search-expanded { border: 1.5px solid var(--muted); background: var(--raised); border-radius: 50%; }
 .search-svg .search-node.hit circle { fill: rgba(122, 167, 224, 0.25); stroke: #7aa7e0; stroke-width: 2.2; stroke-dasharray: 4 2; }
 .search-svg .search-node.repeat circle { fill: rgba(239, 111, 108, 0.22); stroke: var(--err); }
 .swatch.search-computed { border: 1.5px solid var(--muted); border-radius: 50%; }

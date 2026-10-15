@@ -6,6 +6,10 @@
 // there yet; a node whose call is still running is on the current path; the deepest of those is the
 // node being worked on now.
 //
+// Branch-and-bound trees (kind "bnb") come from a live-node list instead of recursion: a node is
+// generated, waits in the list (live), is taken out (polled) and then either expanded (children made)
+// or dropped because its bound cannot beat the best solution so far (pruned).
+//
 // Layout: a tidy tree computed once per trace: leaves side by side in the order they were created,
 // each parent centred over its children, one row per level. Nodes never move while you step.
 
@@ -27,6 +31,14 @@ const KIND_TEXT = {
 
 /** Recursion trees of DP methods (memoised or plain) rather than backtracking state-space trees. */
 const isRecursion = (tree) => tree.kind === "memo" || tree.kind === "recursion";
+const isBnb = (tree) => tree.kind === "bnb";
+
+const BNB_TEXT = {
+    generated: "generated, not added to the live list yet", live: "live: waiting in the list",
+    taken: "taken out of the list, being examined", expanded: "expanded: its children were generated",
+    pruned: "pruned: its bound cannot beat the best so far",
+};
+const ORDER_TEXT = { priority: "best-first (priority queue on the bound)", queue: "FIFO (queue)", stack: "LIFO (stack)" };
 
 export class SearchTreeVisualizer {
     constructor(container, onJump) {
@@ -46,22 +58,28 @@ export class SearchTreeVisualizer {
         const k = step.index;
         const scrollers = [...this.container.querySelectorAll(".array-scroll")].map((s) => s.scrollLeft);
         this.container.replaceChildren();
-        let drawn = 0;
-        this.trees.forEach((tree, t) => {
-            if (!tree.nodes.length || tree.nodes[0].firstStep > k) return;
-            this.container.append(this.#drawTree(tree, this.layouts[t], k, scrollers[drawn]));
-            drawn++;
-        });
-        return drawn;
+        // With several trees (TSP with and without the bound), the one that grew most recently comes first.
+        const latest = (tree) => tree.nodes.reduce((m, n) => (n.firstStep <= k ? Math.max(m, n.firstStep) : m), -1);
+        const order = this.trees.map((tree, t) => t).filter((t) => this.trees[t].nodes.length && this.trees[t].nodes[0].firstStep <= k);
+        order.sort((a, b) => latest(this.trees[b]) - latest(this.trees[a]));
+        const keyed = order.map((t) => this.trees[t].method).join();
+        if (keyed !== this.lastOrder) scrollers.length = 0; // a different tree on top: don't reuse its scroll
+        this.lastOrder = keyed;
+        order.forEach((t, i) => this.container.append(this.#drawTree(this.trees[t], this.layouts[t], k, scrollers[i])));
+        return order.length;
     }
 
     #drawTree(tree, pos, k, oldScroll) {
-        const states = tree.nodes.map((n) => stateAt(n, k));
+        const bnb = isBnb(tree);
+        const states = tree.nodes.map((n) => (bnb ? bnbStateAt(n, k) : stateAt(n, k)));
         const visible = (n) => n.firstStep <= k;
         let current = null;
         for (const n of tree.nodes) {
-            if (states[n.id] === "active" && (!current || n.level >= current.level)) current = n;
+            if (bnb) {
+                if (n.pollStep != null && n.pollStep <= k && (!current || n.pollStep >= current.pollStep)) current = n;
+            } else if (states[n.id] === "active" && (!current || n.level >= current.level)) current = n;
         }
+        const best = new Set((tree.bestUpdates ?? []).filter((u) => u.step <= k && u.node != null).map((u) => u.node));
         const onPath = new Set();
         for (let n = current; n; n = n.parent == null ? null : tree.nodes[n.parent]) onPath.add(n.id);
 
@@ -69,12 +87,14 @@ export class SearchTreeVisualizer {
         block.className = "array-block search-block";
         const title = document.createElement("div");
         title.className = "array-title";
-        title.textContent = `${isRecursion(tree) ? "Recursion tree" : "State-space tree"} · ${tree.method}()`;
+        title.textContent = `${isRecursion(tree) ? "Recursion tree" : bnb ? "Branch-and-bound tree" : "State-space tree"} · ${tree.method}()`;
         const meta = document.createElement("span");
         meta.className = "meta";
         const level = tree.depthVariable ? `level = ${tree.depthVariable}` : "level = depth of the call";
         const branch = tree.kind === "binary" ? "branch = take / leave" : `branch = ${tree.choiceVariable}`;
-        meta.textContent = isRecursion(tree)
+        meta.textContent = bnb
+            ? `each node is labelled with its bound · live nodes wait in ${tree.assignment}, ${ORDER_TEXT[tree.assignmentShape] ?? tree.assignmentShape}${tree.truncated ? " · first 1500 nodes" : ""}`
+            : isRecursion(tree)
             ? `each node is a call, labelled with its arguments${tree.kind === "memo" ? ` · memo: ${tree.assignment}` : " · nothing remembered"}`
             : `${level} · ${branch}${tree.truncated ? " · first 1500 nodes" : ""}`;
         title.append(meta);
@@ -100,16 +120,18 @@ export class SearchTreeVisualizer {
             const cls = ["search-node", state, n === current ? "current" : "", onPath.has(n.id) && n !== current ? "path" : "",
                 n.firstStep === k ? "new" : ""].filter(Boolean).join(" ");
             const g = el("g", { class: cls, tabindex: 0, role: "button" });
-            g.append(el("title", {}, `${n.choice} — ${state === "active" ? "running" : KIND_TEXT[state] ?? state} (step ${n.firstStep + 1})`));
+            const what = bnb ? (n === current && state !== "pruned" && state !== "expanded" ? BNB_TEXT.taken : BNB_TEXT[state] ?? state)
+                : state === "active" ? "running" : KIND_TEXT[state] ?? state;
+            g.append(el("title", {}, `${n.choice} — ${what}${best.has(n.id) ? " · new best solution" : ""} (step ${n.firstStep + 1})`));
             if (state === "rejected") {
                 g.append(el("rect", { x: p.x - 7, y: p.y - 7, width: 14, height: 14, rx: 3 }));
                 g.append(text("search-label", p.x, p.y, "×", "middle"));
                 g.append(text("search-under", p.x, p.y + 17, n.label, "middle"));
             } else {
                 g.append(el("circle", { cx: p.x, cy: p.y, r: R }));
-                const label = n.parent == null && !isRecursion(tree) ? "●" : n.label;
+                const label = n.parent == null && !isRecursion(tree) && !bnb ? "●" : n.label;
                 g.append(text("search-label", p.x, p.y, label.length > 4 ? `${label.slice(0, 3)}…` : label, "middle"));
-                if (state === "solution") g.append(text("search-star", p.x + R - 2, p.y - R + 1, "★", "middle"));
+                if (state === "solution" || best.has(n.id)) g.append(text("search-star", p.x + R - 2, p.y - R + 1, "★", "middle"));
             }
             g.addEventListener("click", () => this.onJump?.(n.firstStep));
             g.addEventListener("keydown", (e) => { if (e.key === "Enter") this.onJump?.(n.firstStep); });
@@ -120,7 +142,7 @@ export class SearchTreeVisualizer {
         scroll.className = "array-scroll search-scroll";
         scroll.append(svg);
         block.append(scroll);
-        block.append(counts(tree, states, current));
+        block.append(bnb ? bnbCounts(tree, states, current, k) : counts(tree, states, current, k));
         block.append(legend(tree));
 
         // Keep the node being worked on (or, once the search is over, the last one decided) in view,
@@ -141,6 +163,54 @@ export class SearchTreeVisualizer {
     }
 }
 
+/** A branch-and-bound node at step k: generated, live (in the list), taken out, expanded or pruned. */
+export function bnbStateAt(n, k) {
+    if (n.firstStep > k) return "hidden";
+    if (n.kind === "pruned" && n.kindStep <= k) return "pruned";
+    if (n.kind === "expanded" && n.kindStep <= k) return "expanded";
+    if (n.pollStep != null && n.pollStep <= k) return "taken";
+    if (n.liveStep != null && n.liveStep <= k) return "live";
+    return "generated";
+}
+
+/** The best solution so far at step k ("none yet" before the first improvement). */
+function bestAt(tree, k) {
+    let value = null;
+    for (const u of tree.bestUpdates ?? []) if (u.step <= k) value = u.value;
+    return value;
+}
+
+function line(label, content) {
+    const row = document.createElement("div");
+    row.className = "graph-line";
+    const l = document.createElement("span");
+    l.className = "graph-line-label";
+    l.textContent = label;
+    const v = document.createElement("code");
+    v.textContent = content;
+    row.append(l, v);
+    return row;
+}
+
+function bnbCounts(tree, states, current, k) {
+    const shown = tree.nodes.filter((n) => states[n.id] !== "hidden");
+    const count = (s) => shown.filter((n) => states[n.id] === s).length;
+    const box = document.createElement("div");
+    box.className = "graph-state";
+    box.append(line("so far", [`${shown.length} generated`, `${count("expanded")} expanded`, `${count("pruned")} pruned`,
+        `${count("live")} live`].join(" · ")));
+    const best = bestAt(tree, k);
+    box.append(line(`best so far (${tree.bestName})`, best == null ? "none yet: no complete solution found" : best));
+    const live = shown.filter((n) => states[n.id] === "live");
+    if (tree.assignmentShape === "priority") {
+        const v = (n) => Number.parseFloat(n.label);
+        live.sort((a, b) => (tree.maximise === false ? v(a) - v(b) : v(b) - v(a)));
+    } else if (tree.assignmentShape === "stack") live.reverse();
+    box.append(line(`live (${tree.assignment})`, live.length ? live.map((n) => n.label).join(", ") + (live.length > 1 ? "   ← next taken first" : "") : "empty"));
+    if (current) box.append(line(states[current.id] === "pruned" ? "dropped" : "taken out", current.choice));
+    return box;
+}
+
 /** What a node looks like at step k: not visible yet, running (active), or its final kind. */
 export function stateAt(n, k) {
     if (n.firstStep > k) return "hidden";
@@ -149,7 +219,7 @@ export function stateAt(n, k) {
     return "visited";
 }
 
-function counts(tree, states, current) {
+function counts(tree, states, current, k) {
     if (isRecursion(tree)) return recursionCounts(tree, states);
     const tally = { active: 0, explored: 0, solution: 0, "dead-end": 0, pruned: 0, rejected: 0 };
     for (const n of tree.nodes) if (states[n.id] in tally) tally[states[n.id]]++;
@@ -181,6 +251,10 @@ function counts(tree, states, current) {
         v2.textContent = path.length ? path.join(" → ") : "the first call (no choice made yet)";
         r2.append(l2, v2);
         p.append(r2);
+    }
+    if (tree.bestName) {
+        const best = bestAt(tree, k);
+        p.append(line(`best so far (${tree.bestName})`, best == null ? "none yet: no complete solution found" : best));
     }
     return p;
 }
@@ -221,6 +295,23 @@ function legend(tree) {
         }
         return p;
     }
+    if (isBnb(tree)) {
+        const items = [["active", "Taken out, being examined"], ["live", "Live: waiting in the list"],
+            ["expanded", "Expanded"], ["pruned", "Pruned by the bound"], ["generated", "Generated, not added yet"]];
+        for (const [cls, label] of items) {
+            const span = document.createElement("span");
+            const swatch = document.createElement("i");
+            swatch.className = `swatch search-${cls}`;
+            span.append(swatch, label);
+            p.append(span);
+        }
+        const star = document.createElement("span");
+        star.textContent = "★ improved the best solution";
+        const hint = document.createElement("span");
+        hint.textContent = "Click a node to jump to when it was generated";
+        p.append(star, hint);
+        return p;
+    }
     const items = [["active", "Current call"], ["path", "Path to it"], ["solution", "Solution"],
         ["dead-end", "Dead end"], ["rejected", "Rejected by the check"]];
     if (tree.nodes.some((n) => n.kind === "pruned")) items.push(["pruned", "Cut by a bound check"]);
@@ -244,7 +335,7 @@ function legend(tree) {
 
 function describe(tree, states) {
     const shown = tree.nodes.filter((n) => states[n.id] !== "hidden").length;
-    return `State-space tree of ${tree.method}: ${shown} nodes so far`;
+    return `${isBnb(tree) ? "Branch-and-bound" : "State-space"} tree of ${tree.method}: ${shown} nodes so far`;
 }
 
 /** Tidy layout: leaves left to right in creation order, parents centred over their children. */

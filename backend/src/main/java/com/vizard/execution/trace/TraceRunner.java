@@ -248,8 +248,8 @@ public class TraceRunner {
     static StructureFacts searchFacts(StructureFacts facts, List<SearchTree> trees) {
         SearchTree best = null;
         for (SearchTree t : trees) {
-            if (t.kind().equals("memo") || t.kind().equals("recursion")) {
-                continue; // recursion trees of DP methods have their own facts
+            if (t.kind().equals("memo") || t.kind().equals("recursion") || t.kind().equals("bnb")) {
+                continue; // recursion trees and branch-and-bound trees have their own facts
             }
             if (best == null || t.nodes().size() > best.nodes().size()) {
                 best = t;
@@ -269,6 +269,29 @@ public class TraceRunner {
     static StructureFacts methodFacts(StructureFacts facts, TraceAnnotator.Annotated annotated) {
         Map<String, Map<String, Long>> perMethod = new HashMap<>();
         for (SearchTree t : annotated.searchTrees()) {
+            if (t.kind().equals("bnb")) {
+                Map<String, Long> m = perMethod.computeIfAbsent(t.method(), k -> new HashMap<>());
+                m.put("generated", (long) t.nodes().size());
+                m.put("expanded", t.nodes().stream().filter(x -> x.kind().equals("expanded")).count());
+                m.put("pruned", t.nodes().stream().filter(x -> x.kind().equals("pruned")).count());
+                m.put("explored", (long) t.nodes().size());
+                long items = itemCount(annotated.steps());
+                if (items > 0) {
+                    m.put("items", items);
+                }
+                continue;
+            }
+            if (t.kind().equals("loop") || t.kind().equals("binary")) {
+                Map<String, Long> m = perMethod.computeIfAbsent(t.method(), k -> new HashMap<>());
+                m.put("explored", t.nodes().stream().filter(x -> !x.kind().equals("rejected")).count());
+                if (t.depthBound() != null) {
+                    m.put("depth", t.depthBound());
+                }
+                if (t.branching() != null) {
+                    m.put("branching", t.branching());
+                }
+                continue;
+            }
             if (!t.kind().equals("memo") && !t.kind().equals("recursion")) {
                 continue;
             }
@@ -355,6 +378,30 @@ public class TraceRunner {
             }
         }
         return best < 0 ? null : new InputSize(bestName, best);
+    }
+
+    /** Length of the largest array held by a static field or a variable of main (the items of a knapsack). */
+    private static long itemCount(List<TraceStep> steps) {
+        long best = 0;
+        for (TraceStep step : steps) {
+            List<VariableSnapshot> vars = new ArrayList<>(step.statics());
+            for (FrameSnapshot f : step.stack()) {
+                vars.addAll(f.variables());
+            }
+            for (VariableSnapshot v : vars) {
+                if (v.value().ref() == null || v.name().equals("args")) {
+                    continue;
+                }
+                HeapObjectSnapshot o = step.heap().get(v.value().ref().toString());
+                if (o != null && "array".equals(o.kind())) {
+                    best = Math.max(best, o.length());
+                }
+            }
+            if (best > 0) {
+                return best;
+            }
+        }
+        return best;
     }
 
     /** Stack traces shouldn't mention Vizard's launcher; the student never wrote it. */

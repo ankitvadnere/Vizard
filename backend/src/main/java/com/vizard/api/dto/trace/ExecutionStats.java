@@ -30,6 +30,10 @@ package com.vizard.api.dto.trace;
  * @param cellsFilled    distinct cells of DP tables (and memo tables) given a value
  * @param memoHits       calls answered from the memo without computing again
  * @param repeatedCalls  plain recursion: calls with arguments that were already computed (wasted work)
+ * @param nodesGenerated branch and bound: node objects created (children of expanded nodes)
+ * @param nodesExpanded  branch and bound: nodes taken from the live list and branched on
+ * @param prunedByBound  branch and bound: nodes dropped because their bound could not beat the best
+ * @param bestUpdates    branch and bound: improvements of the best solution so far
  */
 public record ExecutionStats(
         int steps,
@@ -56,6 +60,10 @@ public record ExecutionStats(
         int backtracks,
         int cellsFilled,
         int memoHits,
-        int repeatedCalls
+        int repeatedCalls,
+        int nodesGenerated,
+        int nodesExpanded,
+        int prunedByBound,
+        int bestUpdates
 ) {
 }

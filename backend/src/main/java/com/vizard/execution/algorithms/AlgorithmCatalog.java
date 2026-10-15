@@ -175,8 +175,9 @@ public final class AlgorithmCatalog {
                     measures = graphMeasures(facts, "V²");
                 }
             }
-            case N_QUEENS, PERMUTATIONS, SUBSETS, GRAPH_COLORING, BACKTRACKING -> {
-                SearchCosts costs = SearchCosts.of(d, facts);
+            case N_QUEENS, PERMUTATIONS, SUBSETS, GRAPH_COLORING, BACKTRACKING, TSP_BACKTRACKING,
+                 ASSIGNMENT_BACKTRACKING, KNAPSACK_BNB, TSP_BNB, ASSIGNMENT_BNB, BRANCH_AND_BOUND -> {
+                SearchCosts costs = SearchCosts.of(d, facts, n);
                 complexity = costs.complexity();
                 bound = costs.bound();
                 measures = costs.measures();

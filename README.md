@@ -3,12 +3,13 @@
 Interactive Java code execution, step-by-step debugging and algorithm visualization, built as a
 Design and Analysis of Algorithms course project.
 
-> Status: **Milestone 8** — step through Java forwards and backwards and *see* it run: arrays, pointers,
+> Status: **Milestone 9** — step through Java forwards and backwards and *see* it run: arrays, pointers,
 > conditions and loops; stacks, queues, priority queues, maps and sets; your own linked lists and binary
 > trees; graphs with BFS, DFS and Dijkstra traversals; backtracking as a growing state-space tree;
-> dynamic programming as a table filling cell by cell and as recursion trees with memo hits.
+> dynamic programming as a table filling cell by cell and as recursion trees with memo hits;
+> branch and bound as a tree of live, expanded and pruned nodes with the best solution so far.
 > Live operation counts, and complexity analysis for the sorting, searching, tree, list, graph,
-> backtracking and dynamic-programming algorithms taught in DAA.
+> backtracking, dynamic-programming and branch-and-bound algorithms taught in DAA.
 
 ## Screenshots
 
@@ -84,6 +85,16 @@ memoised version makes 11, and 3 are answered from the memo (blue, dashed) witho
 Longest common subsequence: rows and columns are labelled with the letters of the two strings.
 
 ![LCS table](docs/screenshots/lcs-table.png)
+
+0/1 knapsack by best-first branch and bound: each node shows its bound; the dashed amber nodes are
+live in the priority queue, red dashed ones were pruned, ★ marks the nodes that improved the best.
+
+![Knapsack branch and bound](docs/screenshots/knapsack-bnb.png)
+
+Travelling salesman with the bound `cost + dist[city][next] < best`: 37 calls instead of the 65 of
+plain backtracking on the same 5 cities.
+
+![TSP branch and bound](docs/screenshots/tsp-bnb.png)
 
 ## How it works
 
@@ -382,6 +393,38 @@ the table. LCS and edit-distance tables are labelled with the letters of the two
 with its arguments. A memo hit (the call returned from the memo check) is drawn blue and dashed: its
 subtree was never built.
 
+### How branch and bound is recognised and drawn
+
+**With a live-node list** (`BnbModelBuilder`): a `while` loop that takes a node of *your* class out of a
+queue, stack or priority queue (`Node u = pq.poll();`), creates new nodes of that class from it, and
+compares a field of a node with a "best so far" variable (`if (u.bound <= best) continue;`,
+`if (v.bound > best) pq.add(v);`). The list decides the strategy: a priority queue is best-first
+(least-cost) branch and bound, a queue FIFO, a stack LIFO. A `bound()` helper that divides (takes a
+fraction of the next item) names the **0/1 knapsack** with the fractional-knapsack bound. Dijkstra's
+priority queue holds `int[]`, not node objects, so it is not mistaken for branch and bound.
+
+**Depth-first, recursive**: a backtracking method (Milestone 7) that keeps a best-so-far variable,
+updates it at the goal and compares against it in its check is backtracking *with a bound*. The cost
+matrix it reads names the problem: `dist[city][next]` (the row is the current city) is the
+**travelling salesman**, `cost[worker][job]` (the row is the level) is **job assignment**. The
+same TSP without the bound is reported as plain backtracking, so the example shows both side by side.
+
+| Problem | Bound | Worst case | Why the worst case stays |
+|---|---|---|---|
+| 0/1 knapsack (best-first) | fractional knapsack of the remaining items | O(2ⁿ) nodes | nothing may be prunable |
+| Travelling salesman | cost so far (+ next edge) vs best tour | O(n!) | every order may need completing |
+| Job assignment | cost so far + cheapest free job of each remaining worker | O(n!) | as above |
+
+The complexity is always the worst case of the method, never a claim about your run; the run's own
+counts (generated, expanded, pruned) are shown next to it, with the full tree size for this n.
+
+**The tree view** (`BnbTracker`, `SearchTreeVisualizer`): every new node object is a tree node whose
+parent is the node being expanded at that moment; it is followed through the list: generated (faded),
+live (dashed amber, waiting in the list), taken out (amber), expanded (grey) or pruned (red dashed:
+its bound could not beat the best). Below the tree: the best so far, the live list in the order it
+will be served, and the node just taken out. Every change of the best variable is recorded with the
+node that caused it (★). Counters: nodes generated, expanded, pruned by bound, best improved.
+
 ### How a condition's result is decided
 
 For `if (arr[j] > arr[j + 1])` Vizard shows `5 > 2` and `true`. The values come from a small
@@ -416,9 +459,9 @@ vizard/
 │       │       ├── insight/        CodeModelBuilder, CodeModel, Expr, ExpressionEvaluator,
 │       │       │                   TraceAnnotator, StructureRoles, GraphModelBuilder, GraphTracker,
 │       │       │                   BacktrackModelBuilder, SearchTracker, DpModelBuilder,
-│       │       │                   DpTracker, RecursionTracker
+│       │       │                   DpTracker, RecursionTracker, BnbModelBuilder, BnbTracker
 │       │       └── algorithms/     AlgorithmDetector, StructureAlgorithms, GraphAlgorithms,
-│       │                           BacktrackAlgorithms, SearchCosts, DpAlgorithms, DpCosts,
+│       │                           BacktrackAlgorithms, SearchCosts, DpAlgorithms, DpCosts, BnbAlgorithms,
 │       │                           AlgorithmCatalog, StructureCosts,
 │       │                           StructureFacts, Algorithm, Detection
 │       ├── main/java/com/vizard/examples/   ExampleCatalog
@@ -426,12 +469,12 @@ vizard/
 │       ├── main/resources/application.properties
 │       └── test/java/com/vizard/   execution/ExecutionServiceTest, TraceServiceTest, InsightTest,
 │                                   StatisticsTest, CollectionsTest, StructureStatisticsTest,
-│                                   GraphTraceTest, SearchTraceTest, DpTraceTest,
+│                                   GraphTraceTest, SearchTraceTest, DpTraceTest, BnbTraceTest,
 │                                   insight/CodeModelBuilderTest, insight/GraphModelBuilderTest,
-│                                   BacktrackModelBuilderTest, DpModelBuilderTest,
+│                                   BacktrackModelBuilderTest, DpModelBuilderTest, BnbModelBuilderTest,
 │                                   trace/NodeShapeTest, algorithms/AlgorithmDetectorTest,
 │                                   StructureAlgorithmsTest, GraphAlgorithmsTest,
-│                                   BacktrackAlgorithmsTest, DpAlgorithmsTest, examples/ExamplesTest
+│                                   BacktrackAlgorithmsTest, DpAlgorithmsTest, BnbAlgorithmsTest, examples/ExamplesTest
 └── frontend/                       Plain HTML/CSS/JS, served by the backend
     ├── index.html
     ├── css/styles.css

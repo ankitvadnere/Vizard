@@ -30,6 +30,7 @@ final class BacktrackAlgorithms {
     static final String COMBINATIONS = "combinations";
     static final String PRUNES = "prunes";
     static final String BOARD = "board";
+    static final String BRANCH_AND_BOUND = "branch-and-bound";
 
     private BacktrackAlgorithms() {
     }
@@ -40,12 +41,15 @@ final class BacktrackAlgorithms {
             return Optional.empty();
         }
         SearchSpec s = found.get();
+        boolean bnb = s.bestVar() != null;
         Algorithm algorithm = switch (s.problem()) {
             case "n-queens" -> Algorithm.N_QUEENS;
-            case "permutations" -> Algorithm.PERMUTATIONS;
-            case "subsets" -> Algorithm.SUBSETS;
+            case "permutations" -> bnb ? Algorithm.BRANCH_AND_BOUND : Algorithm.PERMUTATIONS;
+            case "subsets" -> bnb ? Algorithm.BRANCH_AND_BOUND : Algorithm.SUBSETS;
             case "graph-coloring" -> Algorithm.GRAPH_COLORING;
-            default -> Algorithm.BACKTRACKING;
+            case "tsp" -> bnb ? Algorithm.TSP_BNB : Algorithm.TSP_BACKTRACKING;
+            case "assignment" -> bnb ? Algorithm.ASSIGNMENT_BNB : Algorithm.ASSIGNMENT_BACKTRACKING;
+            default -> bnb ? Algorithm.BRANCH_AND_BOUND : Algorithm.BACKTRACKING;
         };
         String name = s.method() + "()";
         Set<String> traits = new LinkedHashSet<>();
@@ -83,7 +87,16 @@ final class BacktrackAlgorithms {
         evidence.add(s.undoLines().isEmpty()
                 ? "Each new choice overwrites the previous one, so no explicit undo is needed."
                 : "Line " + join(s.undoLines()) + " undoes the choice when the call returns: that is the backtrack.");
+        if (bnb) {
+            traits.add(BRANCH_AND_BOUND);
+            evidence.add("It keeps the best solution so far in " + s.bestVar() + " and its check compares each branch "
+                    + "with it: a branch that cannot beat the best is cut off (branch and bound, depth-first).");
+        }
         switch (algorithm) {
+            case TSP_BACKTRACKING, TSP_BNB -> evidence.add("Each level travels to one more unvisited city, adding "
+                    + "its distance from the current city to the cost; the goal returns to the start.");
+            case ASSIGNMENT_BACKTRACKING, ASSIGNMENT_BNB -> evidence.add("Each level gives the next worker ("
+                    + s.depthParam() + ") one of the jobs not taken yet, adding cost[" + s.depthParam() + "][job].");
             case N_QUEENS -> {
                 boolean board = s.assignmentShape() != null && s.assignmentShape().startsWith("matrix");
                 if (board) {

@@ -151,7 +151,8 @@ final class GraphAlgorithms {
      */
     static boolean isPartOf(Detection helper, List<Detection> found, CompilationUnit cu) {
         for (Detection d : found) {
-            boolean whole = d.algorithm().category().equals("Graphs") || d.algorithm().category().equals("Backtracking");
+            String cat = d.algorithm().category();
+            boolean whole = cat.equals("Graphs") || cat.equals("Backtracking") || cat.equals("Branch and bound");
             if (d == helper || !whole) {
                 continue;
             }

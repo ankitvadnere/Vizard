@@ -11,7 +11,8 @@ import java.util.List;
  * @param method          the recursive method
  * @param problem         "n-queens", "permutations", "subsets", "graph-coloring" or "backtracking"
  * @param kind            "loop" (one branch per choice) or "binary" (take / leave an element) for backtracking;
- *                        "memo" or "recursion" for the recursion tree of a memoised or plain recursive method
+ *                        "memo" or "recursion" for the recursion tree of a memoised or plain recursive method;
+ *                        "bnb" for branch and bound with a live-node list (queue / stack / priority queue)
  * @param depthVariable   what a level of the tree stands for (row, v, i), or null
  * @param choiceVariable  what a branch chooses (col, c, i), or null for "binary"
  * @param assignment      the array the choices are written to (board, color), or null
@@ -21,8 +22,19 @@ import java.util.List;
  * @param branching       choices per level (from the loop's range; 2 for take/leave), or null
  * @param nodes           in creation order; a node's parent always comes before it
  * @param truncated       more calls happened than are listed
+ * @param bestName        branch and bound: the best-so-far variable (best, maxProfit), else null
+ * @param bestUpdates     each improvement of it: the step, the new value, and the node that found it
+ * @param maximise        branch and bound: true when the best is a maximum (bounds are upper bounds)
  */
 public record SearchTree(String method, String problem, String kind, String depthVariable, String choiceVariable,
                          String assignment, String assignmentShape, Long depthBound, Long branching,
-                         List<SearchNode> nodes, boolean truncated) {
+                         List<SearchNode> nodes, boolean truncated, String bestName, List<BestUpdate> bestUpdates,
+                         Boolean maximise) {
+
+    public SearchTree(String method, String problem, String kind, String depthVariable, String choiceVariable,
+                      String assignment, String assignmentShape, Long depthBound, Long branching,
+                      List<SearchNode> nodes, boolean truncated) {
+        this(method, problem, kind, depthVariable, choiceVariable, assignment, assignmentShape, depthBound, branching,
+                nodes, truncated, null, List.of(), null);
+    }
 }

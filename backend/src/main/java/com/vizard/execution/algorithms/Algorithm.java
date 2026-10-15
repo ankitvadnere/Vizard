@@ -34,7 +34,13 @@ public enum Algorithm {
     COIN_CHANGE("coin-change", "Coin change (DP)", "Dynamic programming"),
     MATRIX_CHAIN("matrix-chain", "Matrix chain multiplication", "Dynamic programming"),
     DP_MEMO("dp-memo", "Dynamic programming (memoisation)", "Dynamic programming"),
-    DP_TABLE("dp-table", "Dynamic programming (tabulation)", "Dynamic programming");
+    DP_TABLE("dp-table", "Dynamic programming (tabulation)", "Dynamic programming"),
+    TSP_BACKTRACKING("tsp-backtracking", "Travelling salesman (backtracking)", "Backtracking"),
+    ASSIGNMENT_BACKTRACKING("assignment-backtracking", "Job assignment (backtracking)", "Backtracking"),
+    KNAPSACK_BNB("knapsack-bnb", "0/1 knapsack (branch and bound)", "Branch and bound"),
+    TSP_BNB("tsp-bnb", "Travelling salesman (branch and bound)", "Branch and bound"),
+    ASSIGNMENT_BNB("assignment-bnb", "Job assignment (branch and bound)", "Branch and bound"),
+    BRANCH_AND_BOUND("branch-and-bound", "Branch and bound", "Branch and bound");
 
     private final String id;
     private final String displayName;

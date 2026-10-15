@@ -2,7 +2,7 @@
 // recognised, and the worst-case operation count for this input next to this run's live count.
 
 const METRIC_UNITS = {
-    comparisons: "comparisons", loopIterations: "loop iterations", edgesExamined: "checks", nodesExplored: "nodes",
+    comparisons: "comparisons", loopIterations: "loop iterations", edgesExamined: "checks", nodesExplored: "nodes", nodesGenerated: "nodes",
 };
 
 export class ComplexityPanel {
@@ -132,7 +132,7 @@ export class ComplexityPanel {
         theory.append(`For ${size}: ${bound.description}, `);
         const formula = document.createElement("code");
         formula.textContent = `${bound.formula} = ${bound.value}`;
-        const scope = bound.metric === "nodesExplored" ? ""
+        const scope = bound.metric === "nodesExplored" || bound.metric === "nodesGenerated" ? ""
             : bound.scope === "per search" ? " per search" : bound.scope === "per traversal" ? " per traversal" : "";
         theory.append(formula, ` ${unit}${scope}.`);
 
